@@ -31,7 +31,7 @@ class Options:
         self.python_path = False
         self.dirty_stubs = False
         self.pdb = False
-
+        self.follow_only = []
 
 def main(script_path: str) -> None:
     """Main entry point to the type checker.
@@ -99,7 +99,8 @@ def type_check_only(sources: List[BuildSource],
                        custom_typing_module=options.custom_typing_module,
                        report_dirs=options.report_dirs,
                        flags=options.build_flags,
-                       python_path=options.python_path)
+                       python_path=options.python_path,
+                       follow_only=options.follow_only)
 
 
 FOOTER = """environment variables:
@@ -182,6 +183,8 @@ def process_options() -> Tuple[List[BuildSource], Options]:
     code_group.add_argument('-c', '--command', help="type-check program passed in as string")
     code_group.add_argument('-p', '--package', help="type-check all files in a directory")
     code_group.add_argument('files', nargs='*', help="type-check given files or directories")
+    parser.add_argument('-F', '--follow-only', action='append', dest='follow_modules',
+                            help="follow only these modules")
 
     args = parser.parse_args()
 
@@ -214,6 +217,8 @@ def process_options() -> Tuple[List[BuildSource], Options]:
     options.python_path = args.use_python_path
     options.pdb = args.pdb
     options.custom_typing_module = args.custom_typing
+
+    options.follow_only = (args.follow_modules or []) + [args.package]
 
     # Set build flags.
     if args.python_version is not None:

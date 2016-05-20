@@ -135,7 +135,8 @@ def build(sources: List[BuildSource],
           custom_typing_module: str = None,
           report_dirs: Dict[str, str] = None,
           flags: List[str] = None,
-          python_path: bool = False) -> BuildResult:
+          python_path: bool = False,
+          follow_only: List[str] = None) -> BuildResult:
     """Analyze a program.
 
     A single call to build performs parsing, semantic analysis and optionally
@@ -203,6 +204,7 @@ def build(sources: List[BuildSource],
                            ignore_prefix=os.getcwd(),
                            custom_typing_module=custom_typing_module,
                            source_set=source_set,
+                           follow_only=follow_only,
                            reports=reports)
 
     try:
@@ -358,7 +360,8 @@ class BuildManager:
                  ignore_prefix: str,
                  custom_typing_module: str,
                  source_set: BuildSourceSet,
-                 reports: Reports) -> None:
+                 reports: Reports,
+                 follow_only: List[str]) -> None:
         self.start_time = time.time()
         self.data_dir = data_dir
         self.errors = Errors()
@@ -370,6 +373,7 @@ class BuildManager:
         self.custom_typing_module = custom_typing_module
         self.source_set = source_set
         self.reports = reports
+        self.follow_only = follow_only or []
         check_untyped_defs = CHECK_UNTYPED_DEFS in self.flags
         self.semantic_analyzer = SemanticAnalyzer(lib_path, self.errors,
                                                   pyversion=pyversion,
@@ -1039,6 +1043,12 @@ class State:
         else:
             self.import_context = []
         self.id = id or '__main__'
+
+        required = ['builtins','typing','abc']
+
+        if not any([self.id == name or self.id.startswith("%s." % name) for name in manager.follow_only]) and self.id not in required:
+            raise ModuleNotFound
+
         if not path and source is None:
             file_id = id
             if id == 'builtins' and manager.pyversion[0] == 2:
