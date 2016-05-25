@@ -1046,8 +1046,11 @@ class State:
 
         required = ['builtins','typing','abc']
 
-        if not any([self.id == name or self.id.startswith("%s." % name) for name in manager.follow_only]) and self.id not in required:
+        _path = find_module(self.id, manager.lib_path)
+        is_inside_path = _path and os.getcwd() in os.path.abspath(_path)
+        if not is_inside_path and not any([self.id == name or self.id.startswith("%s." % name) for name in manager.follow_only]) and self.id not in required:
             raise ModuleNotFound
+
 
         if not path and source is None:
             file_id = id
