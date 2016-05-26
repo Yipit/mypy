@@ -277,6 +277,12 @@ def mypy_path() -> List[str]:
         return []
     return path_env.split(os.pathsep)
 
+def yipit_library_path() -> List[str]:
+    path_env = os.getenv('MYPY_YIPIT')
+    if not path_env:
+        return []
+    return path_env.split(os.pathsep)
+
 
 def default_lib_path(data_dir: str, pyversion: Tuple[int, int],
         python_path: bool) -> List[str]:
@@ -439,7 +445,7 @@ class BuildManager:
 
     def is_module(self, id: str) -> bool:
         """Is there a file in the file system corresponding to module id?"""
-        return find_module(id, self.lib_path) is not None
+        return find_module(id, self.lib_path, self.follow_only) is not None
 
     def parse_file(self, id: str, path: str, source: str) -> MypyFile:
         """Parse the source of a file with the given name.
@@ -573,7 +579,7 @@ def is_file(path: str) -> bool:
     return os.path.isfile(path)
 
 
-def find_module(id: str, lib_path: Iterable[str]) -> str:
+def find_module(id: str, lib_path: Iterable[str], follow_only) -> str:
     """Return the path of the module source file, or None if not found."""
     if not isinstance(lib_path, tuple):
         lib_path = tuple(lib_path)
@@ -618,11 +624,13 @@ def find_module(id: str, lib_path: Iterable[str]) -> str:
     key = (id, lib_path)
     if key not in find_module_cache:
         find_module_cache[key] = find()
+        if find_module_cache[key] is None:
+            if any([id == name or id.startswith("%s." % name) for name in follow_only]):
+                return find_module(id, yipit_library_path(), follow_only)
     return find_module_cache[key]
 
-
-def find_modules_recursive(module: str, lib_path: List[str]) -> List[BuildSource]:
-    module_path = find_module(module, lib_path)
+def find_modules_recursive(module: str, lib_path: List[str], follow_only) -> List[BuildSource]:
+    module_path = find_module(module, lib_path, follow_only)
     if not module_path:
         return []
     result = [BuildSource(module_path, module, None)]
@@ -642,14 +650,14 @@ def find_modules_recursive(module: str, lib_path: List[str]) -> List[BuildSource
                     (os.path.isfile(os.path.join(abs_path, '__init__.py')) or
                     os.path.isfile(os.path.join(abs_path, '__init__.pyi'))):
                 hits.add(item)
-                result += find_modules_recursive(module + '.' + item, lib_path)
+                result += find_modules_recursive(module + '.' + item, lib_path, follow_only)
             elif item != '__init__.py' and item != '__init__.pyi' and \
                     item.endswith(('.py', '.pyi')):
                 mod = item.split('.')[0]
                 if mod not in hits:
                     hits.add(mod)
                     result += find_modules_recursive(
-                        module + '.' + mod, lib_path)
+                        module + '.' + mod, lib_path, follow_only)
     return result
 
 
@@ -1044,13 +1052,9 @@ class State:
             self.import_context = []
         self.id = id or '__main__'
 
-        required = ['builtins','typing','abc']
-
-        _path = find_module(self.id, manager.lib_path)
-        is_inside_path = _path and os.getcwd() in os.path.abspath(_path)
-        if not is_inside_path and not any([self.id == name or self.id.startswith("%s." % name) for name in manager.follow_only]) and self.id not in required:
+        required = ['builtins','__builtin__', 'typing','abc'] + manager.follow_only
+        if  not any([id == name or id.startswith("%s." % name) for name in required]):
             raise ModuleNotFound
-
 
         if not path and source is None:
             file_id = id
@@ -1064,8 +1068,15 @@ class State:
                 # difference and just assume 'builtins' everywhere,
                 # which simplifies code.
                 file_id = '__builtin__'
-            path = find_module(file_id, manager.lib_path)
+            path = find_module(file_id, manager.lib_path, manager.follow_only)
+            if path is None:
+                if any([id == name or id.startswith("%s." % name) for name in manager.follow_only]):
+                    path = find_module(file_id, yipit_library_path(), manager.follow_only)
+                    # print("loaded from yipit", id, path)
+                # else:
+                    # print("skiped", id)
             if path:
+                # print("regular load", id)
                 # In silent mode, don't import .py files, except from stubs.
                 if (SILENT_IMPORTS in manager.flags and
                         path.endswith('.py') and (caller_state or ancestor_for)):
