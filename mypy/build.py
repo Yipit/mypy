@@ -26,7 +26,7 @@ from typing import (AbstractSet, Dict, Iterable, Iterator, List,
 from mypy.types import Type
 from mypy.nodes import (MypyFile, Node, Import, ImportFrom, ImportAll,
                         SymbolTableNode, MODULE_REF)
-from mypy.semanal import FirstPass, SemanticAnalyzer, ThirdPass
+from mypy.semanal import FirstPass, SemanticAnalyzer, ThirdPass, MyAnalyzer
 from mypy.checker import TypeChecker
 from mypy.errors import Errors, CompileError, report_internal_error
 from mypy import fixup
@@ -1347,7 +1347,11 @@ def dispatch(sources: List[BuildSource], manager: BuildManager) -> None:
     graph = load_graph(sources, manager)
     manager.log("Loaded graph with %d nodes" % len(graph))
     process_graph(graph, manager)
-
+    #  graph['test3.v1'].tree.defs[0].defs.body[0].arguments[0].variable.type
+    an = MyAnalyzer()
+    an.analyze(graph)
+    import sys
+    sys.exit(0)
 
 def load_graph(sources: List[BuildSource], manager: BuildManager) -> Graph:
     """Given some source files, load the full dependency graph."""
