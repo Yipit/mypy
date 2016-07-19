@@ -129,8 +129,8 @@ class PatcherVisitor(NodeVisitor):
 
 
 
-    # def visit_import_all(self, i: ImportAll) -> None:
-    #     pass
+    def visit_import_all(self, i: ImportAll) -> None:
+        print("MYPY Warning: can't process import * at {}:{}".format(self.file_path, i.line))
 
     #
     # Statements
@@ -146,6 +146,9 @@ class PatcherVisitor(NodeVisitor):
     def visit_assignment_stmt(self, s: AssignmentStmt) -> None:
         for n in s.lvalues:
             self.local_scopes[-1].append(n.name)
+        for n in s.lvalues:
+            n.accept(self)
+        s.rvalue.accept(self)
 
     def visit_decorator(self, dec: Decorator) -> None:
         self.tr.transform_decorator(self, dec, self.red)
@@ -159,8 +162,8 @@ class PatcherVisitor(NodeVisitor):
 
         self.last_decorators = []
 
-    def visit_expression_stmt(self, s: ExpressionStmt) -> None:
-        s.expr.accept(self)
+    def visit_expression_stmt(self, st: ExpressionStmt) -> None:
+        st.expr.accept(self)
 
     def visit_return_stmt(self, s: ReturnStmt) -> None:
         # # if expr is 'test3.v1.Pipe.foo()'
@@ -266,6 +269,9 @@ class PatcherVisitor(NodeVisitor):
             e.expr.accept(self)
 
     def visit_call_expr(self, expr: CallExpr) -> None:
+        self.tr.transform_call_expr(self, expr, self.red)
+        # expr.callee.name == 'bar'
+        # expr.callee.expr.node.name() == self
         # # if expr is 'test3.v1.Pipe.foo()'
         # if expr.callee.expr.node.type.type.fullname() == 'test3.v1.Pipe' and expr.callee.name == 'foo':
         #     node = [n for n in red.find_all('AtomtrailersNode') if n.absolute_bounding_box.top_left.line == expr.line]
@@ -281,6 +287,10 @@ class PatcherVisitor(NodeVisitor):
 
 
     def visit_member_expr(self, expr: MemberExpr) -> None:
+        if isinstance(expr.expr, NameExpr):
+            if not self.is_local(expr.expr.name) and expr.expr.name in self.imports.keys():
+                import pdb;pdb.set_trace()
+                self.tr.transform_member(self, expr.expr.name, expr.name, expr, self.red)
         base = expr.expr
         base.accept(self)
 

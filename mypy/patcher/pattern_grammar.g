@@ -20,33 +20,36 @@ decorator = token("@") py_name
 
 pattern = typed_pattern
         | return_pattern
+        | lhs_fully_qualified_call:e -> ['fqe_call', e]
         | fully_qualified_pattern:e -> ["fqe", e]
+
+lhs_fully_qualified_call = py_name:id token("(") lhs_args:a token(")") -> ['call', id, a]
 
 fully_qualified_pattern = py_name
 
-typed_pattern = token("[") py_name:t token("].") method_call:c -> ['typed', t, c]
+typed_pattern = token("[") py_name:t token("].") lhs_method_call:c -> ['typed', t, c]
               | token("[") py_name:t token("].") attribute_ref:r  -> ['typed', t, r]
 
-return_pattern = token("return") token("(") args:a token(")") -> ['return', a]
+return_pattern = token("return") token("(") lhs_args:a token(")") -> ['return', a]
 
-method_call = py_name:id token("(") args:a token(")") -> ['call', id, a]
+lhs_method_call = py_name:id token("(") lhs_args:a token(")") -> ['call', id, a]
 
 attribute_ref = py_name
 
-args = arg_el:x (token(",") arg_el)*:xs -> [x] + xs
-    | -> []
+lhs_args = lhs_arg_el:x (token(",") lhs_arg_el)*:xs -> [x] + xs
+         | -> []
 
-arg_el = varargs_qualifier:q arg:x -> ['arg', q, x]
-       | token("[") args:x  token("]") -> ['pylist', x]
+lhs_arg_el = varargs_qualifier:q lhs_arg:x -> ['arg', q, x]
+           | token("[") lhs_args:x  token("]") -> ['pylist', x]
 
 varargs_qualifier = "**" -> 'py_kwarg'
                   | "*" -> 'py_args'
                   |
 
-arg = token("$") letter+:x -> ['vid', ''.join(x)]
-    | token("$") digit+:x -> ['vparam', ''.join(x)]
-    | py_name:x -> ['pyid', x]
-    | token("...") -> 'arg_rest'
+lhs_arg = token("$") letter+:x -> ['vid', ''.join(x)]
+        | token("$") digit+:x -> ['vparam', ''.join(x)]
+        | py_name:x -> ['pyid', x]
+        | token("...") -> 'arg_rest'
 
 action = token("warn") quoted_string:s -> ["warning", s]
        | token("delete") -> ["delete"]
@@ -62,5 +65,8 @@ lit_escaped = ~'"' '\\' :x -> "\\" + x
 
 ast_start = ['rules' [ast_rule+]]
 
-ast_rule = ['rule' 'anywhere' ['fqe' :x] ['warning' ['string' :msg]]] -> self.g.warning_for_fqe(x, msg)
+ast_rule = ['rule' 'anywhere' ['fqe' :fqe] ['warning' ['string' :msg]]] -> self.g.warning_for_fqe(fqe, msg)
+         | ['rule' 'anywhere' ['fqe_call' ['call' :fqe ast_lhs_args:a]] ['warning' ['string' :msg]]] -> self.g.warning_for_fqe_call(fqe, a, msg)
 
+ast_lhs_args = [ast_lhs_arg*:a] -> a
+ast_lhs_arg = ['arg' :qualifier 'arg_rest'] -> {'vararg': True}

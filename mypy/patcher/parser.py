@@ -2,28 +2,28 @@ from pymeta import builder, grammar
 from pymeta.runtime import OMetaBase
 from pymeta.builder import TreeBuilder, moduleFromGrammar
 import os, sys
-from types import ModuleType
+from mypy.nodes import MemberExpr
+import functools
 
 
 class CodeTransformer(object):
     def __init__(self):
-        self.transformers = {'import': [], 'import_all': [], 'import_from': [], 'name': []}
-        self.mod = ModuleType("_mypy_CodeTransformerModule")
+        self.transformers = {'import': [], 'import_all': [], 'import_from': [], 'name': [], 'member': [], 'call': []}
 
     def transform_import(self, visitor, varname, mypy_node, redbaron):
-        for r in self.transformers['import']:
-            r(visitor, varname, mypy_node, redbaron)
+        for tr in self.transformers['import']:
+            tr(visitor, varname, mypy_node, redbaron)
 
     def transform_func_def(self, visitor, mypy_node, redbaron):
         pass
 
     def transform_import_from(self, visitor, varname, mypy_node, redbaron):
-        for r in self.transformers['import_from']:
-            r(visitor, varname, mypy_node, redbaron)
+        for tr in self.transformers['import_from']:
+            tr(visitor, varname, mypy_node, redbaron)
 
     def transform_import_all(self, visitor, mypy_node, redbaron):
-        for r in self.transformers['import_all']:
-            r(visitor, varname, mypy_node, redbaron)
+        for tr in self.transformers['import_all']:
+            tr(visitor, varname, mypy_node, redbaron)
 
     def transform_return_stmt(self, visitor, mypy_node, redbaron):
         pass
@@ -35,19 +35,55 @@ class CodeTransformer(object):
         pass
 
     def transform_call_expr(self, visitor, mypy_node, redbaron):
-        pass
+        for tr in self.transformers['call']:
+            tr(visitor, mypy_node, redbaron)
 
     def transform_name(self, visitor, varname, mypy_node, redbaron):
-        for r in self.transformers['name']:
-            r(visitor, varname, mypy_node, redbaron)
+        for tr in self.transformers['name']:
+            tr(visitor, varname, mypy_node, redbaron)
 
+    def transform_member(self, visitor, l, r, mypy_node, redbaron):
+        for tr in self.transformers['member']:
+            tr(visitor, l, r, mypy_node, redbaron)
 
-transform_fqe_template = """
-def f(visitor, varname, mypy_node, redbaron):
-    if not visitor.is_local(varname) and varname in visitor.imports.keys() and visitor.imports[varname] == {fqe}:
+def warn_name_fqe_template(fqe, message, visitor, varname, mypy_node, redbaron):
+    if not visitor.is_local(varname) and varname in visitor.imports.keys() and visitor.imports[varname] == fqe:
         red_node = redbaron.find_by_position((mypy_node.line,1))
-        print("WARNING " + visitor.file_path + ":" + str(mypy_node.line) + " - " + {message})
+        print("WARNING " + visitor.file_path + ":" + str(mypy_node.line) + " - " + message)
+
+def warn_member_fqe_template(fqe, message, visitor, l, r, mypy_node, redbaron):
+    if not visitor.is_local(l) and l in visitor.imports.keys() and (visitor.imports[l] + '.' + r) == fqe:
+        red_node = redbaron.find_by_position((mypy_node.line,1))
+        print("WARNING " + visitor.file_path + ":" + str(mypy_node.line) + " - " + message)
+
+
+warn_call_template = """
+def f(visitor, mypy_node, redbaron):
+    if isinstance(mypy_node.callee, MemberExpr) and hasattr(mypy_node.callee.expr, 'name'): # call in the format 'foo.bar()' -- e.g. not in (a+b).bar()
+        local_name = str(mypy_node.callee.expr.name)
+        callee = str(mypy_node.callee.name)
+        if (not visitor.is_local(local_name)) and local_name in visitor.imports.keys() and visitor.imports[local_name] == {fqe} and (len(mypy_node.args) == {arity} or len(mypy_node.args) < {min_arity}):
+            red_node = redbaron.find_by_position((mypy_node.line,1))
+            print("WARNING " + visitor.file_path + ":" + str(mypy_node.line) + " - " + {message})
 """
+
+# warn_fqe_template = """
+# def f(visitor, callee, mypy_node, redbaron):
+#     if not visitor.is_local(callee) and callee in visitor.imports.keys() and visitor.imports[callee] == {fqe}:
+#         red_node = redbaron.find_by_position((mypy_node.line,1))
+#         print("WARNING " + visitor.file_path + ":" + str(mypy_node.line) + " - " + {message})
+
+#     if mypy_node.callee.expr.node.type.type.fullname() == 'test3.v1.Pipe' and expr.callee.name == 'foo':
+#         #     node = [n for n in red.find_all('AtomtrailersNode') if n.absolute_bounding_box.top_left.line == expr.line]
+#         #     assert len(node) == 1
+#         #     node = node[0]
+#         #     import pdb;pdb.set_trace()
+#         #     pass
+
+#     if not visitor.is_local(varname) and varname in visitor.imports.keys() and visitor.imports[varname] == {fqe}:
+#         red_node = redbaron.find_by_position((mypy_node.line,1))
+#         print("WARNING " + visitor.file_path + ":" + str(mypy_node.line) + " - " + {message})
+# """
 
 # warning_template = """print("WARNING " + visitor.file_path + ":" + str(mypy_node.line) + " - " + {message})"""
 
@@ -71,22 +107,25 @@ class Generator(object):
     def __init__(self):
         self.tr = CodeTransformer()
 
-    def add_method(self, name, source):
-        obj = compile(source, "<eval>", 'exec')
-        exec(source, self.tr.mod.__dict__)
-        self.tr.transformers[name].append(self.tr.mod.f)
+    def _add_method(self, name, f):
+        self.tr.transformers[name].append(f)
 
     def warning_for_fqe(self, fqe, msg):
-        self.add_method('import', transform_fqe_template.format(fqe=repr(fqe), message=repr(msg)))
-        self.add_method('import_from', transform_fqe_template.format(fqe=repr(fqe), message=repr(msg)))
-        self.add_method('import_all', transform_fqe_template.format(fqe=repr(fqe), message=repr(msg)))
-        self.add_method('name', transform_fqe_template.format(fqe=repr(fqe), message=repr(msg)))
+        self._add_method('import', functools.partial(warn_name_fqe_template, fqe, msg))
+        self._add_method('import_from', functools.partial(warn_name_fqe_template, fqe, msg))
+        self._add_method('import_all', functools.partial(warn_name_fqe_template, fqe, msg))
+        self._add_method('name', functools.partial(warn_name_fqe_template, fqe, msg))
+        self._add_method('member', functools.partial(warn_member_fqe_template, fqe, msg))
 
-    def get_transformer(self):
-        return self.tr
+    def warning_for_fqe_call(self, fqe, args, msg):
+        if any([x['vararg'] for x in args]):
+            self._add_method('call', warn_call_template.format(fqe=repr(fqe), message=repr(msg)))
+        else:
+            self._add_method('call', warn_call_template.format(fqe=repr(fqe), message=repr(msg), min_arity='float("+inf")', arity=len(args)))
         # source = class_template.format(name="Transformer", methods='\n    '.join(self.methods))
         # obj = compile(source, "<eval>", 'exec')
         # eval(obj, self.mod.__dict__)
+        pass
 
 
 def get_transformer_for(ypatch_file):
@@ -107,7 +146,7 @@ def get_transformer_for(ypatch_file):
     parser = Parser([ast])
     parser.g = Generator()
     print(parser.apply("ast_start"))
-    return parser.g.get_transformer()
+    return parser.g.tr
 
 
 # print(Parser('on * [sheqel.Sheqel].write_if_new => foo();').apply("start"))
