@@ -99,10 +99,10 @@ class PatcherVisitor(NodeVisitor):
         for origin, local in i.ids:
             if local is None:
                 self.imports[origin] = origin
-                self.tr.transform_import(self, i, origin, self.red)
+                self.tr.transform_import(self, origin, i, self.red)
             else:
                 self.imports[local] = origin
-                self.tr.transform_import(self, i, local, self.red)
+                self.tr.transform_import(self, local, i, self.red)
 
 
     def visit_import_from(self, imp: ImportFrom) -> None:
@@ -114,10 +114,10 @@ class PatcherVisitor(NodeVisitor):
             for origin, local in imp.names:
                 if local is None:
                     self.imports[origin] = curr + '.' + origin
-                    self.tr.transform_import_from(self, imp, origin, self.red)
+                    self.tr.transform_import_from(self, origin, imp, self.red)
                 else:
                     self.imports[local] = curr + '.' + origin
-                    self.tr.transform_import_from(self, imp, local, self.red)
+                    self.tr.transform_import_from(self, local, imp, self.red)
         else:
             for origin, local in imp.names:
                 if local is None:
@@ -270,17 +270,6 @@ class PatcherVisitor(NodeVisitor):
 
     def visit_call_expr(self, expr: CallExpr) -> None:
         self.tr.transform_call_expr(self, expr, self.red)
-        # expr.callee.name == 'bar'
-        # expr.callee.expr.node.name() == self
-        # # if expr is 'test3.v1.Pipe.foo()'
-        # if expr.callee.expr.node.type.type.fullname() == 'test3.v1.Pipe' and expr.callee.name == 'foo':
-        #     node = [n for n in red.find_all('AtomtrailersNode') if n.absolute_bounding_box.top_left.line == expr.line]
-        #     assert len(node) == 1
-        #     node = node[0]
-        #     import pdb;pdb.set_trace()
-        #     pass
-
-        self.tr.transform_call_expr(self, expr, self.red)
         expr.callee.accept(self)
         for a in expr.args:
             a.accept(self)
@@ -289,7 +278,6 @@ class PatcherVisitor(NodeVisitor):
     def visit_member_expr(self, expr: MemberExpr) -> None:
         if isinstance(expr.expr, NameExpr):
             if not self.is_local(expr.expr.name) and expr.expr.name in self.imports.keys():
-                import pdb;pdb.set_trace()
                 self.tr.transform_member(self, expr.expr.name, expr.name, expr, self.red)
         base = expr.expr
         base.accept(self)

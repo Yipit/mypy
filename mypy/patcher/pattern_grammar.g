@@ -70,3 +70,4 @@ ast_rule = ['rule' 'anywhere' ['fqe' :fqe] ['warning' ['string' :msg]]] -> self.
 
 ast_lhs_args = [ast_lhs_arg*:a] -> a
 ast_lhs_arg = ['arg' :qualifier 'arg_rest'] -> {'vararg': True}
+            | ['arg' :qualifier ['vid' :name]] -> {'vararg': False, 'vid': name}

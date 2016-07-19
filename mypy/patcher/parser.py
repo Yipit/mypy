@@ -56,16 +56,17 @@ def warn_member_fqe_template(fqe, message, visitor, l, r, mypy_node, redbaron):
         red_node = redbaron.find_by_position((mypy_node.line,1))
         print("WARNING " + visitor.file_path + ":" + str(mypy_node.line) + " - " + message)
 
-
-warn_call_template = """
-def f(visitor, mypy_node, redbaron):
+def warn_call_template(fqe, message, min_arity, arity, visitor, mypy_node, redbaron):
     if isinstance(mypy_node.callee, MemberExpr) and hasattr(mypy_node.callee.expr, 'name'): # call in the format 'foo.bar()' -- e.g. not in (a+b).bar()
         local_name = str(mypy_node.callee.expr.name)
         callee = str(mypy_node.callee.name)
-        if (not visitor.is_local(local_name)) and local_name in visitor.imports.keys() and visitor.imports[local_name] == {fqe} and (len(mypy_node.args) == {arity} or len(mypy_node.args) < {min_arity}):
+        full = local_name + '.' + callee
+        if (not visitor.is_local(local_name)) and \
+           local_name in visitor.imports.keys() and \
+           full == fqe and \
+           (len(mypy_node.args) == arity or len(mypy_node.args) < min_arity):
             red_node = redbaron.find_by_position((mypy_node.line,1))
-            print("WARNING " + visitor.file_path + ":" + str(mypy_node.line) + " - " + {message})
-"""
+            print("WARNING " + visitor.file_path + ":" + str(mypy_node.line) + " - " + message)
 
 # warn_fqe_template = """
 # def f(visitor, callee, mypy_node, redbaron):
@@ -119,9 +120,9 @@ class Generator(object):
 
     def warning_for_fqe_call(self, fqe, args, msg):
         if any([x['vararg'] for x in args]):
-            self._add_method('call', warn_call_template.format(fqe=repr(fqe), message=repr(msg)))
+            self._add_method('call', functools.partial(warn_call_template, fqe, msg, len(args)-1, len(args))) # -1: don't count the vararg itself
         else:
-            self._add_method('call', warn_call_template.format(fqe=repr(fqe), message=repr(msg), min_arity='float("+inf")', arity=len(args)))
+            self._add_method('call', functools.partial(warn_call_template, fqe, msg, -1, len(args)))
         # source = class_template.format(name="Transformer", methods='\n    '.join(self.methods))
         # obj = compile(source, "<eval>", 'exec')
         # eval(obj, self.mod.__dict__)
