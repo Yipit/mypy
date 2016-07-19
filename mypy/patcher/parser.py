@@ -2,24 +2,28 @@ from pymeta import builder, grammar
 from pymeta.runtime import OMetaBase
 from pymeta.builder import TreeBuilder, moduleFromGrammar
 import os, sys
-from types import ModuleType as module
+from types import ModuleType
 
 
-class CodeRewritter(object):
-    def transform_import(self, visitor, mypy_node, redbaron):
-        pass
+class CodeTransformer(object):
+    def __init__(self):
+        self.transformers = {'import': [], 'import_all': [], 'import_from': [], 'name': []}
+        self.mod = ModuleType("_mypy_CodeTransformerModule")
+
+    def transform_import(self, visitor, varname, mypy_node, redbaron):
+        for r in self.transformers['import']:
+            r(visitor, varname, mypy_node, redbaron)
 
     def transform_func_def(self, visitor, mypy_node, redbaron):
         pass
 
-    def transform_import(self, visitor, mypy_node, redbaron):
-        pass
-
-    def transform_import_from(self, visitor, mypy_node, redbaron):
-        pass
+    def transform_import_from(self, visitor, varname, mypy_node, redbaron):
+        for r in self.transformers['import_from']:
+            r(visitor, varname, mypy_node, redbaron)
 
     def transform_import_all(self, visitor, mypy_node, redbaron):
-        pass
+        for r in self.transformers['import_all']:
+            r(visitor, varname, mypy_node, redbaron)
 
     def transform_return_stmt(self, visitor, mypy_node, redbaron):
         pass
@@ -33,19 +37,19 @@ class CodeRewritter(object):
     def transform_call_expr(self, visitor, mypy_node, redbaron):
         pass
 
+    def transform_name(self, visitor, varname, mypy_node, redbaron):
+        for r in self.transformers['name']:
+            r(visitor, varname, mypy_node, redbaron)
 
-class_template = """
-class {name}(CodeRewritter):
-{methods}
-"""
 
-transform_import_template = """
-    def transform_import{suffix}(self, visitor, mypy_node, redbaron):
+transform_fqe_template = """
+def f(visitor, varname, mypy_node, redbaron):
+    if not visitor.is_local(varname) and varname in visitor.imports.keys() and visitor.imports[varname] == {fqe}:
         red_node = redbaron.find_by_position((mypy_node.line,1))
-        {action}
+        print("WARNING " + visitor.file_path + ":" + str(mypy_node.line) + " - " + {message})
 """
 
-warning_template = """print("WARNING " + visitor.file_path + ":" + str(mypy_node.line) + " - " + {message})"""
+# warning_template = """print("WARNING " + visitor.file_path + ":" + str(mypy_node.line) + " - " + {message})"""
 
 #  def transform_return_stmt(self, mypy_visitor, mypy_node, redb):
 #      if 'app_filter' in mypy_visitor.current_decorators:
@@ -65,23 +69,24 @@ warning_template = """print("WARNING " + visitor.file_path + ":" + str(mypy_node
 
 class Generator(object):
     def __init__(self):
-        self.methods = []
-        modname = "_patcher"
-        filename = "dummy"
-        self.mod = module(modname)
-        self.mod.__dict__['CodeRewritter'] = CodeRewritter
+        self.tr = CodeTransformer()
 
+    def add_method(self, name, source):
+        obj = compile(source, "<eval>", 'exec')
+        exec(source, self.tr.mod.__dict__)
+        self.tr.transformers[name].append(self.tr.mod.f)
 
-    def warning_for_fqe(self, _, msg):
-        self.methods.append(transform_import_template.format(suffix='', action=warning_template.format(message=repr(msg))))
-        self.methods.append(transform_import_template.format(suffix='_from', action=warning_template.format(message=repr(msg))))
-        self.methods.append(transform_import_template.format(suffix='_all', action=warning_template.format(message=repr(msg))))
+    def warning_for_fqe(self, fqe, msg):
+        self.add_method('import', transform_fqe_template.format(fqe=repr(fqe), message=repr(msg)))
+        self.add_method('import_from', transform_fqe_template.format(fqe=repr(fqe), message=repr(msg)))
+        self.add_method('import_all', transform_fqe_template.format(fqe=repr(fqe), message=repr(msg)))
+        self.add_method('name', transform_fqe_template.format(fqe=repr(fqe), message=repr(msg)))
 
     def get_transformer(self):
-        source = class_template.format(name="Transformer", methods='\n    '.join(self.methods))
-        obj = compile(source, "<eval>", 'exec')
-        eval(obj, self.mod.__dict__)
-        return self.mod.Transformer()
+        return self.tr
+        # source = class_template.format(name="Transformer", methods='\n    '.join(self.methods))
+        # obj = compile(source, "<eval>", 'exec')
+        # eval(obj, self.mod.__dict__)
 
 
 def get_transformer_for(ypatch_file):

@@ -28,9 +28,9 @@ T = TypeVar('T')
 from redbaron import RedBaron
 
 
-class MyAnalyzer(NodeVisitor):
+class PatcherVisitor(NodeVisitor):
     def __init__(self, fpath, mod, red, tr):
-        super(MyAnalyzer, self).__init__()
+        super(PatcherVisitor, self).__init__()
         self.file_path = fpath
         self.current_path = mod
         self.current_module = mod
@@ -40,23 +40,21 @@ class MyAnalyzer(NodeVisitor):
         self.last_decorators = []
         self.current_decorators = []
 
-        # ids: global
         self.imports = {}
-        # self.named_imports = [] # [(from, as), ...]
-        # self.all_imports = []   # [from, ...]
 
         # locals
         self.local_scopes = [[]]
+
         self.tr = tr
 
-    # def analyze(self, graph) -> None:
-    #     # TODO: make analyze() receive the tree, not the bunch of irrelevant graphs to filter
-    #     for id, x in [(id, item) for id, item in graph.items() if id not in ['abc', 'builtins', 'typing']]:
-    #         with open(x.xpath) as f:
-    #             self.current_path = self.current_module = x.id
-    #             self.red = RedBaron(f.read())
-    #             x.tree.accept(self)
-    #             print(self.red.dumps())
+    def is_local(self, name):
+        for sc in range(len(self.local_scopes)-1, 0, -1):
+            if name in self.local_scopes[sc]:
+                return True
+            for v in self.local_scopes[sc]:
+                if hasattr(v, 'name') and v.name() == name:
+                    return True
+        return False
 
     def visit_mypy_file(self, o: 'mypy.nodes.MypyFile') -> T:
         for d in o.defs:
@@ -101,10 +99,10 @@ class MyAnalyzer(NodeVisitor):
         for origin, local in i.ids:
             if local is None:
                 self.imports[origin] = origin
+                self.tr.transform_import(self, i, origin, self.red)
             else:
                 self.imports[local] = origin
-        import pdb;pdb.set_trace()
-        self.tr.transform_import(self, i, self.red)
+                self.tr.transform_import(self, i, local, self.red)
 
 
     def visit_import_from(self, imp: ImportFrom) -> None:
@@ -116,15 +114,20 @@ class MyAnalyzer(NodeVisitor):
             for origin, local in imp.names:
                 if local is None:
                     self.imports[origin] = curr + '.' + origin
+                    self.tr.transform_import_from(self, imp, origin, self.red)
                 else:
                     self.imports[local] = curr + '.' + origin
+                    self.tr.transform_import_from(self, imp, local, self.red)
         else:
             for origin, local in imp.names:
                 if local is None:
                     self.imports[origin] = imp.id + '.' + origin
+                    self.tr.transform_import_from(self, origin, imp, self.red)
                 else:
                     self.imports[local] = imp.id + '.' + origin
-        self.tr.transform_import_from(self, imp, self.red)
+                    self.tr.transform_import_from(self, local, imp, self.red)
+
+
 
     # def visit_import_all(self, i: ImportAll) -> None:
     #     pass
@@ -229,7 +232,11 @@ class MyAnalyzer(NodeVisitor):
     #
 
     def visit_name_expr(self, expr: NameExpr) -> None:
-        pass
+        # this is only for references to global imports
+        # for now, we assume no `import` statements are mande inside functions
+        # in the target code
+        if not self.is_local(expr.name) and expr.name in self.imports.keys():
+            self.tr.transform_name(self, expr.name, expr, self.red)
 
     def visit_super_expr(self, expr: SuperExpr) -> None:
         import pdb;pdb.set_trace()

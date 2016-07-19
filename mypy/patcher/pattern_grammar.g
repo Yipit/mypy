@@ -60,7 +60,7 @@ lit_escaped = ~'"' '\\' :x -> "\\" + x
 
 
 
-ast_start = ['rules' [ast_rule]+]
+ast_start = ['rules' [ast_rule+]]
 
 ast_rule = ['rule' 'anywhere' ['fqe' :x] ['warning' ['string' :msg]]] -> self.g.warning_for_fqe(x, msg)
 

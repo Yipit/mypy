@@ -1365,7 +1365,7 @@ def yipit_patch_modules(graph, yipit_patch):
     for id, x in [(id, item) for id, item in graph.items() if id not in ['abc', 'builtins', 'typing']]:
         with open(x.xpath) as f:
             red = RedBaron(f.read())
-        an = visitor.MyAnalyzer(x.xpath, x.id, red, tr)
+        an = visitor.PatcherVisitor(x.xpath, x.id, red, tr)
         x.tree.accept(an)
         # print(red.dumps())
     import sys
