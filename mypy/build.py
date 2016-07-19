@@ -26,7 +26,7 @@ from typing import (AbstractSet, Dict, Iterable, Iterator, List,
 from mypy.types import Type
 from mypy.nodes import (MypyFile, Node, Import, ImportFrom, ImportAll,
                         SymbolTableNode, MODULE_REF)
-from mypy.semanal import FirstPass, SemanticAnalyzer, ThirdPass, MyAnalyzer
+from mypy.semanal import FirstPass, SemanticAnalyzer, ThirdPass
 from mypy.checker import TypeChecker
 from mypy.errors import Errors, CompileError, report_internal_error
 from mypy import fixup
@@ -136,7 +136,8 @@ def build(sources: List[BuildSource],
           report_dirs: Dict[str, str] = None,
           flags: List[str] = None,
           python_path: bool = False,
-          follow_only: List[str] = None) -> BuildResult:
+          follow_only: List[str] = None,
+          yipit_patch: str = None) -> BuildResult:
     """Analyze a program.
 
     A single call to build performs parsing, semantic analysis and optionally
@@ -205,6 +206,7 @@ def build(sources: List[BuildSource],
                            custom_typing_module=custom_typing_module,
                            source_set=source_set,
                            follow_only=follow_only,
+                           yipit_patch=yipit_patch,
                            reports=reports)
 
     try:
@@ -367,7 +369,8 @@ class BuildManager:
                  custom_typing_module: str,
                  source_set: BuildSourceSet,
                  reports: Reports,
-                 follow_only: List[str]) -> None:
+                 follow_only: List[str],
+                 yipit_patch: str) -> None:
         self.start_time = time.time()
         self.data_dir = data_dir
         self.errors = Errors()
@@ -380,6 +383,8 @@ class BuildManager:
         self.source_set = source_set
         self.reports = reports
         self.follow_only = follow_only or []
+        self.yipit_patch = yipit_patch
+
         check_untyped_defs = CHECK_UNTYPED_DEFS in self.flags
         self.semantic_analyzer = SemanticAnalyzer(lib_path, self.errors,
                                                   pyversion=pyversion,
@@ -1347,11 +1352,25 @@ def dispatch(sources: List[BuildSource], manager: BuildManager) -> None:
     graph = load_graph(sources, manager)
     manager.log("Loaded graph with %d nodes" % len(graph))
     process_graph(graph, manager)
-    #  graph['test3.v1'].tree.defs[0].defs.body[0].arguments[0].variable.type
-    an = MyAnalyzer()
-    an.analyze(graph)
+
+    if manager.yipit_patch:
+        yipit_patch_modules(graph, manager.yipit_patch)
+        sys.exit(0)
+
+def yipit_patch_modules(graph, yipit_patch):
+    from .patcher import visitor, parser
+    from redbaron import RedBaron
+
+    tr = parser.get_transformer_for(yipit_patch)
+    for id, x in [(id, item) for id, item in graph.items() if id not in ['abc', 'builtins', 'typing']]:
+        with open(x.xpath) as f:
+            red = RedBaron(f.read())
+        an = visitor.MyAnalyzer(x.xpath, x.id, red, tr)
+        x.tree.accept(an)
+        # print(red.dumps())
     import sys
     sys.exit(0)
+
 
 def load_graph(sources: List[BuildSource], manager: BuildManager) -> Graph:
     """Given some source files, load the full dependency graph."""

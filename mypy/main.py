@@ -100,7 +100,8 @@ def type_check_only(sources: List[BuildSource],
                        report_dirs=options.report_dirs,
                        flags=options.build_flags,
                        python_path=options.python_path,
-                       follow_only=options.follow_only)
+                       follow_only=options.follow_only,
+                       yipit_patch=options.yipit_patch)
 
 
 FOOTER = """environment variables:
@@ -185,6 +186,8 @@ def process_options() -> Tuple[List[BuildSource], Options]:
     code_group.add_argument('files', nargs='*', help="type-check given files or directories")
     parser.add_argument('-F', '--follow-only', action='append', dest='follow_modules',
                             help="follow only these modules")
+    parser.add_argument('-P', '--yipit-patch', action='append', dest='yipit_patch',
+                            help="patch the module according to spec")
 
     args = parser.parse_args()
 
@@ -222,6 +225,11 @@ def process_options() -> Tuple[List[BuildSource], Options]:
         options.follow_only = (args.follow_modules or []) + [args.package]
     else:
         options.follow_only = (args.follow_modules or [])
+
+    if args.yipit_patch:
+        options.yipit_patch = args.yipit_patch[0]
+    else:
+        options.yipit_patch = None
 
     # Set build flags.
     if args.python_version is not None:
