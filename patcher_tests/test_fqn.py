@@ -61,20 +61,20 @@ on * sys.exit($x) warn "foo";
             output = execute_mypy(py_file, ypatch_file)
             assert output == 'WARNING {}:4 - foo\n'.format(py_file)
 
-# def test_fqe_call_var_arg_warning():
-#     code = """
-# import sys
-# sys.exit()
-# sys.exit(1)
-# sys.exit(1,2)
-# a = sys.exit
-# """
+def test_fqe_call_var_arg_warning():
+    code = """
+import sys
+sys.exit()
+sys.exit(1)
+sys.exit(1,2)
+a = sys.exit
+"""
 
-#     ypatch = """
-# on * sys.exit($x, ...) warn "foo";
-# """
+    ypatch = """
+on * sys.exit($x, ...) warn "foo";
+"""
 
-#     with using_tmp_file(code) as py_file:
-#         with using_tmp_file(ypatch) as ypatch_file:
-#             output = execute_mypy(py_file, ypatch_file)
-#             assert output == 'WARNING {}:4 - foo\nWARNING {}:5 - foo\n'.format(py_file, py_file)
+    with using_tmp_file(code) as py_file:
+        with using_tmp_file(ypatch) as ypatch_file:
+            output = execute_mypy(py_file, ypatch_file)
+            assert output == 'WARNING {}:4 - foo\nWARNING {}:5 - foo\n'.format(py_file, py_file)

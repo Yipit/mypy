@@ -64,7 +64,7 @@ def warn_call_template(fqe, message, min_arity, arity, visitor, mypy_node, redba
         if (not visitor.is_local(local_name)) and \
            local_name in visitor.imports.keys() and \
            full == fqe and \
-           (len(mypy_node.args) == arity or len(mypy_node.args) < min_arity):
+           (len(mypy_node.args) == arity or len(mypy_node.args) >= min_arity):
             red_node = redbaron.find_by_position((mypy_node.line,1))
             print("WARNING " + visitor.file_path + ":" + str(mypy_node.line) + " - " + message)
 
@@ -122,7 +122,7 @@ class Generator(object):
         if any([x['vararg'] for x in args]):
             self._add_method('call', functools.partial(warn_call_template, fqe, msg, len(args)-1, len(args))) # -1: don't count the vararg itself
         else:
-            self._add_method('call', functools.partial(warn_call_template, fqe, msg, -1, len(args)))
+            self._add_method('call', functools.partial(warn_call_template, fqe, msg, float('+inf'), len(args)))
         # source = class_template.format(name="Transformer", methods='\n    '.join(self.methods))
         # obj = compile(source, "<eval>", 'exec')
         # eval(obj, self.mod.__dict__)
