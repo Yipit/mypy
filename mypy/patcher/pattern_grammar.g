@@ -91,8 +91,8 @@ ast_lhs_arg = ['arg' :qualifier 'arg_rest'] -> {'vararg': True, 'qualifier': qua
 fqe_action :lfqe = ['warning' ['string' :msg]] -> self.g.warning_for_fqe(lfqe, msg)
                  | ['pyid' :pyid] -> self.g.subst_fqe(lfqe, pyid)
 
-fqe_call_action :lfqe :la =  ['warning' ['string' :msg]] -> self.g.warning_for_fqe_call(lfqe, la, msg)
-                          | ['call' :rfqe ast_rhs_args:ra] -> self.g.subst_fqe_call(lfqe, rfqe, la, ra)
+fqe_call_action :lfqe :la =  ['warning' ['string' :msg]] -> self.g.warning_for_fqe_call(lfqe[0], la, msg)
+                          | ['call' :rfqe ast_rhs_args:ra] -> self.g.subst_fqe_call(lfqe[0], rfqe, la, ra)
 
 ast_rhs_args = [ast_rhs_arg*:a] -> a
 
