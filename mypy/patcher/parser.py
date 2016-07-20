@@ -68,6 +68,7 @@ def member_fqe_template(action, fqe, visitor, l, r, mypy_node, source_lines):
     if not visitor.is_local(l) and l in visitor.imports.keys() and full_name == fqe:
         action(visitor, mypy_node, source_lines, l, r)
 
+
 def call_template(action, fqe, min_arity, arity, visitor, mypy_node, source_lines, star_pos=None, star_star_pos=None):
     if isinstance(mypy_node.callee, MemberExpr) and hasattr(mypy_node.callee.expr, 'name'): # call in the format 'foo.bar()' -- e.g. not in (a+b).bar()
         local_name = str(mypy_node.callee.expr.name)

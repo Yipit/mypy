@@ -205,3 +205,67 @@ def baz(x):
 """
 
 
+def test_fqe_subst_import_as():
+    code = """
+import sys as foo
+foo.exit
+print( 1, \
+    foo.exit)
+print(foo.exit + nonfoo.exit + foo.exiting)
+def bar(foo):
+    return foo.exit
+def baz(x):
+    return foo.exit
+"""
+
+    ypatch = """
+on * sys.exit => new_exit;
+"""
+
+    with using_tmp_file(code) as py_file:
+        with using_tmp_file(ypatch) as ypatch_file:
+            _, content = execute_mypy(py_file, ypatch_file)
+            content == """
+import sys as foo
+foo.new_exit
+print( 1, \
+    foo.new_exit)
+print(foo.new_exit + nonfoo.exit + foo.exiting)
+def bar(foo):
+    return foo.exit
+def baz(x):
+    return foo.new_exit
+"""
+
+
+def test_fqe_subst_import_from():
+    code = """
+from sys import exit
+exit
+print( 1, \
+    exit + sys.exit)
+print(sys.exit + nonsys.exit + sys.exiting + exit)
+def bar(sys, exit):
+    return sys.exit, exit
+def baz(x):
+    return sys.exit, exit
+"""
+
+    ypatch = """
+on * sys.exit => new_exit;
+"""
+
+    with using_tmp_file(code) as py_file:
+        with using_tmp_file(ypatch) as ypatch_file:
+            _, content = execute_mypy(py_file, ypatch_file)
+            content == """
+from sys import exit
+new_exit
+print( 1, \
+    new_exit + sys.exit)
+print(sys.exit + nonsys.exit + sys.exiting + new_exit)
+def bar(sys, exit):
+    return sys.exit, exit
+def baz(x):
+    return sys.exit, new_exit
+"""
