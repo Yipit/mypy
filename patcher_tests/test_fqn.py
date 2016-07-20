@@ -23,7 +23,9 @@ def using_tmp_file(source):
 def execute_mypy(py_file, ypatch_file):
     proc = subprocess.Popen(["mypy", '--check-untyped-defs', py_file, "-P", ypatch_file], stdout=subprocess.PIPE)
     out = proc.communicate()[0]
-    return out.decode('utf-8')
+    with open(py_file, "r") as f:
+        content = f.read()
+    return out.decode('utf-8'), content
 
 
 def test_fqe_warning():
@@ -39,9 +41,11 @@ on * sys.exit warn "foo";
 
     with using_tmp_file(code) as py_file:
         with using_tmp_file(ypatch) as ypatch_file:
-            output = execute_mypy(py_file, ypatch_file)
+            output, _ = execute_mypy(py_file, ypatch_file)
             assert output == 'WARNING {}:3 - foo\nWARNING {}:4 - foo\n'.format(py_file, py_file)
 
+
+################# testing warnings #################
 
 def test_fqe_call_fixed_arg_warning():
     code = """
@@ -58,7 +62,7 @@ on * sys.exit($x) warn "foo";
 
     with using_tmp_file(code) as py_file:
         with using_tmp_file(ypatch) as ypatch_file:
-            output = execute_mypy(py_file, ypatch_file)
+            output, _ = execute_mypy(py_file, ypatch_file)
             assert output == 'WARNING {}:4 - foo\n'.format(py_file)
 
 
@@ -77,7 +81,7 @@ on * sys.exit($x, ...) warn "foo";
 
     with using_tmp_file(code) as py_file:
         with using_tmp_file(ypatch) as ypatch_file:
-            output = execute_mypy(py_file, ypatch_file)
+            output, _ = execute_mypy(py_file, ypatch_file)
             assert output == 'WARNING {}:4 - foo\nWARNING {}:5 - foo\n'.format(py_file, py_file)
 
 
@@ -97,8 +101,7 @@ on * sys.exit($x, *$y) warn "foo";
 
     with using_tmp_file(code) as py_file:
         with using_tmp_file(ypatch) as ypatch_file:
-            import pdb;pdb.set_trace()
-            output = execute_mypy(py_file, ypatch_file)
+            output, _ = execute_mypy(py_file, ypatch_file)
             assert output == 'WARNING {}:6 - foo\n'.format(py_file)
 
 
@@ -120,7 +123,7 @@ on * sys.exit($x, *$y, **$kw) warn "foo";
 
     with using_tmp_file(code) as py_file:
         with using_tmp_file(ypatch) as ypatch_file:
-            output = execute_mypy(py_file, ypatch_file)
+            output, _ = execute_mypy(py_file, ypatch_file)
             assert output == 'WARNING {}:8 - foo\n'.format(py_file)
 
 
@@ -141,7 +144,7 @@ on * [__main__.X].bar($x, $y) warn "foo";
 
     with using_tmp_file(code) as py_file:
         with using_tmp_file(ypatch) as ypatch_file:
-            output = execute_mypy(py_file, ypatch_file)
+            output, _ = execute_mypy(py_file, ypatch_file)
             assert output == 'WARNING {}:7 - foo\n'.format(py_file)
 
 
@@ -162,5 +165,5 @@ on * [__main__.X].bar($x, $y, ...) warn "foo";
 
     with using_tmp_file(code) as py_file:
         with using_tmp_file(ypatch) as ypatch_file:
-            output = execute_mypy(py_file, ypatch_file)
+            output, _ = execute_mypy(py_file, ypatch_file)
             assert output == 'WARNING {}:7 - foo\nWARNING {}:8 - foo\n'.format(py_file, py_file)
