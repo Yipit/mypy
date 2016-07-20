@@ -143,10 +143,11 @@ def get_transformer_for(ypatch_file):
     with open(ypatch_file) as f:
         parser = Parser(f.read())
         ast, err = parser.apply("start")
-        print(ast)
+        # print(ast)
     parser = Parser([ast])
     parser.g = Generator()
-    print(parser.apply("ast_start"))
+    ast, err = parser.apply("ast_start")
+    # print(ast, err)
     return parser.g.tr
 
 
