@@ -167,3 +167,41 @@ on * [__main__.X].bar($x, $y, ...) warn "foo";
         with using_tmp_file(ypatch) as ypatch_file:
             output, _ = execute_mypy(py_file, ypatch_file)
             assert output == 'WARNING {}:7 - foo\nWARNING {}:8 - foo\n'.format(py_file, py_file)
+
+
+################# testing substitutions #################
+
+
+def test_fqe_subst_regular_import():
+    code = """
+import sys
+sys.exit
+print( 1, \
+    sys.exit)
+print(sys.exit + nonsys.exit + sys.exiting)
+def bar(sys):
+    return sys.exit
+def baz(x):
+    return sys.exit
+"""
+
+    ypatch = """
+on * sys.exit => new_exit;
+"""
+
+    with using_tmp_file(code) as py_file:
+        with using_tmp_file(ypatch) as ypatch_file:
+            _, content = execute_mypy(py_file, ypatch_file)
+            assert content == """
+import sys
+sys.new_exit
+print( 1, \
+    sys.new_exit)
+print(sys.new_exit + nonsys.exit + sys.exiting)
+def bar(sys):
+    return sys.exit
+def baz(x):
+    return sys.new_exit
+"""
+
+

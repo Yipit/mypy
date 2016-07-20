@@ -1359,15 +1359,15 @@ def dispatch(sources: List[BuildSource], manager: BuildManager) -> None:
 
 def yipit_patch_modules(graph, yipit_patch, follow_only, paths):
     from .patcher import visitor, parser
-    from redbaron import RedBaron
 
     tr = parser.get_transformer_for(yipit_patch)
     for id, x in [(id, item) for id, item in graph.items() if id in follow_only or item.xpath in paths]:
         with open(x.xpath) as f:
-            red = RedBaron(f.read())
-        an = visitor.PatcherVisitor(x.xpath, x.id, red, tr)
+            source_lines = f.read().split('\n')
+        an = visitor.PatcherVisitor(x.xpath, x.id, source_lines, tr)
         x.tree.accept(an)
-        # print(red.dumps())
+        with open(x.xpath, "w") as f:
+            f.write('\n'.join(source_lines))
     import sys
     sys.exit(0)
 

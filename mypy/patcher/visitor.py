@@ -29,12 +29,12 @@ from redbaron import RedBaron
 
 
 class PatcherVisitor(NodeVisitor):
-    def __init__(self, fpath, mod, red, tr):
+    def __init__(self, fpath, mod, source_lines, tr):
         super(PatcherVisitor, self).__init__()
         self.file_path = fpath
         self.current_path = mod
         self.current_module = mod
-        self.red = red
+        self.source_lines = source_lines
         self.current_module = None
         self.current_class = None
         self.last_decorators = []
@@ -76,7 +76,7 @@ class PatcherVisitor(NodeVisitor):
         for arg in defn.arguments:
             self.local_scopes[-1].append(arg.variable)
 
-        self.tr.transform_func_def(self, defn, self.red)
+        self.tr.transform_func_def(self, defn, self.source_lines)
 
         defn.body.accept(self)
         self.local_scopes.pop()
@@ -90,7 +90,7 @@ class PatcherVisitor(NodeVisitor):
         prev_path = self.current_path
         self.current_path = defn.fullname
         self.local_scopes.append([])
-        self.tr.transform_class_def(self, defn, self.red)
+        self.tr.transform_class_def(self, defn, self.source_lines)
         defn.defs.accept(self)
         self.local_scopes.pop()
         self.current_path = prev_path
@@ -99,10 +99,10 @@ class PatcherVisitor(NodeVisitor):
         for origin, local in i.ids:
             if local is None:
                 self.imports[origin] = origin
-                self.tr.transform_import(self, origin, i, self.red)
+                self.tr.transform_import(self, origin, i, self.source_lines)
             else:
                 self.imports[local] = origin
-                self.tr.transform_import(self, local, i, self.red)
+                self.tr.transform_import(self, local, i, self.source_lines)
 
 
     def visit_import_from(self, imp: ImportFrom) -> None:
@@ -114,18 +114,18 @@ class PatcherVisitor(NodeVisitor):
             for origin, local in imp.names:
                 if local is None:
                     self.imports[origin] = curr + '.' + origin
-                    self.tr.transform_import_from(self, origin, imp, self.red)
+                    self.tr.transform_import_from(self, origin, imp, self.source_lines)
                 else:
                     self.imports[local] = curr + '.' + origin
-                    self.tr.transform_import_from(self, local, imp, self.red)
+                    self.tr.transform_import_from(self, local, imp, self.source_lines)
         else:
             for origin, local in imp.names:
                 if local is None:
                     self.imports[origin] = imp.id + '.' + origin
-                    self.tr.transform_import_from(self, origin, imp, self.red)
+                    self.tr.transform_import_from(self, origin, imp, self.source_lines)
                 else:
                     self.imports[local] = imp.id + '.' + origin
-                    self.tr.transform_import_from(self, local, imp, self.red)
+                    self.tr.transform_import_from(self, local, imp, self.source_lines)
 
 
 
@@ -151,7 +151,7 @@ class PatcherVisitor(NodeVisitor):
         s.rvalue.accept(self)
 
     def visit_decorator(self, dec: Decorator) -> None:
-        self.tr.transform_decorator(self, dec, self.red)
+        self.tr.transform_decorator(self, dec, self.source_lines)
 
         for d in dec.decorators:
             d.accept(self)
@@ -174,7 +174,7 @@ class PatcherVisitor(NodeVisitor):
         #     import pdb;pdb.set_trace()
         #     pass
 
-        self.tr.transform_return_stmt(self, s, self.red)
+        self.tr.transform_return_stmt(self, s, self.source_lines)
         s.expr.accept(self)
 
     def visit_raise_stmt(self, s: RaiseStmt) -> None:
@@ -239,7 +239,7 @@ class PatcherVisitor(NodeVisitor):
         # for now, we assume no `import` statements are mande inside functions
         # in the target code
         if not self.is_local(expr.name) and expr.name in self.imports.keys():
-            self.tr.transform_name(self, expr.name, expr, self.red)
+            self.tr.transform_name(self, expr.name, expr, self.source_lines)
 
     def visit_super_expr(self, expr: SuperExpr) -> None:
         import pdb;pdb.set_trace()
@@ -269,7 +269,7 @@ class PatcherVisitor(NodeVisitor):
             e.expr.accept(self)
 
     def visit_call_expr(self, expr: CallExpr) -> None:
-        self.tr.transform_call_expr(self, expr, self.red)
+        self.tr.transform_call_expr(self, expr, self.source_lines)
         expr.callee.accept(self)
         for a in expr.args:
             a.accept(self)
@@ -278,7 +278,7 @@ class PatcherVisitor(NodeVisitor):
     def visit_member_expr(self, expr: MemberExpr) -> None:
         if isinstance(expr.expr, NameExpr):
             if not self.is_local(expr.expr.name) and expr.expr.name in self.imports.keys():
-                self.tr.transform_member(self, expr.expr.name, expr.name, expr, self.red)
+                self.tr.transform_member(self, expr.expr.name, expr.name, expr, self.source_lines)
         base = expr.expr
         base.accept(self)
 
