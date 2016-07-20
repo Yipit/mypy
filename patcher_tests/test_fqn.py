@@ -21,7 +21,7 @@ def using_tmp_file(source):
         os.remove(path)
 
 def execute_mypy(py_file, ypatch_file):
-    proc = subprocess.Popen(["mypy", py_file, "-P", ypatch_file], stdout=subprocess.PIPE)
+    proc = subprocess.Popen(["mypy", '--check-untyped-defs', py_file, "-P", ypatch_file], stdout=subprocess.PIPE)
     out = proc.communicate()[0]
     return out.decode('utf-8')
 
@@ -79,3 +79,45 @@ on * sys.exit($x, ...) warn "foo";
         with using_tmp_file(ypatch) as ypatch_file:
             output = execute_mypy(py_file, ypatch_file)
             assert output == 'WARNING {}:4 - foo\nWARNING {}:5 - foo\n'.format(py_file, py_file)
+
+
+def test_typed_call_args_warning():
+    code = """
+class X(object):
+    def foo(self):
+        self.bar()
+        self.baz()
+        self.bar(1)
+        self.bar(1,2)
+        self.bar(1,2,3)
+"""
+
+    ypatch = """
+on * [__main__.X].bar($x, $y) warn "foo";
+"""
+
+    with using_tmp_file(code) as py_file:
+        with using_tmp_file(ypatch) as ypatch_file:
+            output = execute_mypy(py_file, ypatch_file)
+            assert output == 'WARNING {}:7 - foo\n'.format(py_file)
+
+
+def test_typed_call_varargs_warning():
+    code = """
+class X(object):
+    def foo(self):
+        self.bar()
+        self.baz()
+        self.bar(1)
+        self.bar(1,2)
+        self.bar(1,2,3)
+"""
+
+    ypatch = """
+on * [__main__.X].bar($x, $y, ...) warn "foo";
+"""
+
+    with using_tmp_file(code) as py_file:
+        with using_tmp_file(ypatch) as ypatch_file:
+            output = execute_mypy(py_file, ypatch_file)
+            assert output == 'WARNING {}:7 - foo\nWARNING {}:8 - foo\n'.format(py_file, py_file)

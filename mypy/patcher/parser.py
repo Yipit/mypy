@@ -3,8 +3,8 @@ from pymeta.runtime import OMetaBase
 from pymeta.builder import TreeBuilder, moduleFromGrammar
 import os, sys
 from mypy.nodes import MemberExpr
+from mypy.types import AnyType
 import functools
-
 
 class CodeTransformer(object):
     def __init__(self):
@@ -72,6 +72,22 @@ def warn_call_template(fqe, message, min_arity, arity, visitor, mypy_node, redba
             print("WARNING " + visitor.file_path + ":" + str(mypy_node.line) + " - " + message)
 
 
+def warn_typed_call_template(rtype, method_name, message, min_arity, arity, visitor, mypy_node, redbaron):
+    if isinstance(mypy_node.callee, MemberExpr) and hasattr(mypy_node.callee.expr, 'name'): # call in the format 'foo.bar()' -- e.g. not in (a+b).bar()
+        rec_type = mypy_node.callee.expr.node.type
+        if type(rec_type) == AnyType:
+            rec_type_name = 'Any'
+        else:
+            rec_type_name = rec_type.type.fullname()
+
+        callee = str(mypy_node.callee.name)
+        if callee == method_name and \
+           rtype == rec_type_name and \
+           (len(mypy_node.args) == arity or len(mypy_node.args) >= min_arity):
+            red_node = redbaron.find_by_position((mypy_node.line,1))
+            print("WARNING " + visitor.file_path + ":" + str(mypy_node.line) + " - " + message)
+
+
 class Generator(object):
     def __init__(self):
         self.tr = CodeTransformer()
@@ -92,6 +108,12 @@ class Generator(object):
         else:
             self._add_method('call', functools.partial(warn_call_template, fqe, msg, float('+inf'), len(args)))
 
+
+    def warning_for_typed_call(self, rtype, method_name, args, msg):
+        if any([x['vararg'] for x in args]):
+            self._add_method('call', functools.partial(warn_typed_call_template, rtype, method_name, msg, len(args)-1, len(args))) # -1: don't count the vararg itself
+        else:
+            self._add_method('call', functools.partial(warn_typed_call_template, rtype, method_name, msg, float('+inf'), len(args)))
 
 def get_transformer_for(ypatch_file):
     pg = grammar.OMetaGrammar(open(os.path.join(os.path.dirname(__file__),"pattern_grammar.g")).read())

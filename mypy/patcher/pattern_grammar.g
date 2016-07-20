@@ -67,6 +67,7 @@ ast_start = ['rules' [ast_rule+]]
 
 ast_rule = ['rule' 'anywhere' ['fqe' :fqe] ['warning' ['string' :msg]]] -> self.g.warning_for_fqe(fqe, msg)
          | ['rule' 'anywhere' ['fqe_call' ['call' :fqe ast_lhs_args:a]] ['warning' ['string' :msg]]] -> self.g.warning_for_fqe_call(fqe, a, msg)
+         | ['rule' 'anywhere' ['typed' :type ['call' :method ast_lhs_args:a]] ['warning' ['string' :msg]]] -> self.g.warning_for_typed_call(type, method, a, msg)
 
 ast_lhs_args = [ast_lhs_arg*:a] -> a
 ast_lhs_arg = ['arg' :qualifier 'arg_rest'] -> {'vararg': True}
