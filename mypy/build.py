@@ -1053,7 +1053,7 @@ class State:
         self.id = id or '__main__'
 
         required = ['builtins','__builtin__', 'typing','abc'] + manager.follow_only
-        if  not any([id == name or id.startswith("%s." % name) for name in required]):
+        if len(manager.follow_only) > 0 and not any([id == name or id.startswith("%s." % name) for name in required]):
             raise ModuleNotFound
 
         if not path and source is None:

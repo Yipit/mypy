@@ -218,7 +218,10 @@ def process_options() -> Tuple[List[BuildSource], Options]:
     options.pdb = args.pdb
     options.custom_typing_module = args.custom_typing
 
-    options.follow_only = (args.follow_modules or []) + [args.package]
+    if args.package:
+        options.follow_only = (args.follow_modules or []) + [args.package]
+    else:
+        options.follow_only = (args.follow_modules or [])
 
     # Set build flags.
     if args.python_version is not None:
