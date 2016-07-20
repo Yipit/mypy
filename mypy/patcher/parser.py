@@ -59,15 +59,30 @@ def warn_member_fqe_template(fqe, message, visitor, l, r, mypy_node, redbaron):
         print("WARNING " + visitor.file_path + ":" + str(mypy_node.line) + " - " + message)
 
 
-def warn_call_template(fqe, message, min_arity, arity, visitor, mypy_node, redbaron):
+def warn_call_template(fqe, message, min_arity, arity, visitor, mypy_node, redbaron, star_pos=None, star_star_pos=None):
     if isinstance(mypy_node.callee, MemberExpr) and hasattr(mypy_node.callee.expr, 'name'): # call in the format 'foo.bar()' -- e.g. not in (a+b).bar()
         local_name = str(mypy_node.callee.expr.name)
         callee = str(mypy_node.callee.name)
         full = local_name + '.' + callee
+
+        node_star = [idx for idx, arg_kind in enumerate(mypy_node.arg_kinds) if arg_kind == 2]
+        if node_star:
+            node_star_pos = node_star[0]
+        else:
+            node_star_pos = None
+
+        node_star_star = [idx for idx, arg_kind in enumerate(mypy_node.arg_kinds) if arg_kind == 4]
+        if node_star_star:
+            node_star_star_pos = node_star_star[0]
+        else:
+            node_star_star_pos = None
+
         if (not visitor.is_local(local_name)) and \
            local_name in visitor.imports.keys() and \
            full == fqe and \
-           (len(mypy_node.args) == arity or len(mypy_node.args) >= min_arity):
+           (len(mypy_node.args) == arity or len(mypy_node.args) >= min_arity) and\
+           star_pos == node_star_pos and \
+           star_star_pos == node_star_star_pos:
             red_node = redbaron.find_by_position((mypy_node.line,1))
             print("WARNING " + visitor.file_path + ":" + str(mypy_node.line) + " - " + message)
 
@@ -103,10 +118,22 @@ class Generator(object):
         self._add_method('member', functools.partial(warn_member_fqe_template, fqe, msg))
 
     def warning_for_fqe_call(self, fqe, args, msg):
-        if any([x['vararg'] for x in args]):
-            self._add_method('call', functools.partial(warn_call_template, fqe, msg, len(args)-1, len(args))) # -1: don't count the vararg itself
+        star_args = [idx for idx, arg in enumerate(args) if arg['qualifier'] == '*']
+        star_star_args = [idx for idx, arg in enumerate(args) if arg['qualifier'] == '**']
+        if star_args:
+            star_pos = star_args[0]
         else:
-            self._add_method('call', functools.partial(warn_call_template, fqe, msg, float('+inf'), len(args)))
+            star_pos = None
+
+        if star_star_args:
+            star_star_pos = star_star_args[0]
+        else:
+            star_star_pos = None
+
+        if any([x['vararg'] for x in args]):
+            self._add_method('call', functools.partial(warn_call_template, fqe, msg, len(args)-1, len(args), star_pos=star_pos, star_star_pos=star_star_pos)) # -1: don't count the vararg itself
+        else:
+            self._add_method('call', functools.partial(warn_call_template, fqe, msg, float('+inf'), len(args), star_pos=star_pos, star_star_pos=star_star_pos))
 
 
     def warning_for_typed_call(self, rtype, method_name, args, msg):

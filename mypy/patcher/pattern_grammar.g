@@ -42,8 +42,8 @@ lhs_args = lhs_arg_el:x (token(",") lhs_arg_el)*:xs -> [x] + xs
 lhs_arg_el = varargs_qualifier:q lhs_arg:x -> ['arg', q, x]
            | token("[") lhs_args:x  token("]") -> ['pylist', x]
 
-varargs_qualifier = "**" -> 'py_kwarg'
-                  | "*" -> 'py_args'
+varargs_qualifier = token("**")
+                  | token("*")
                   |
 
 lhs_arg = token("$") letter+:x -> ['vid', ''.join(x)]
@@ -70,5 +70,6 @@ ast_rule = ['rule' 'anywhere' ['fqe' :fqe] ['warning' ['string' :msg]]] -> self.
          | ['rule' 'anywhere' ['typed' :type ['call' :method ast_lhs_args:a]] ['warning' ['string' :msg]]] -> self.g.warning_for_typed_call(type, method, a, msg)
 
 ast_lhs_args = [ast_lhs_arg*:a] -> a
-ast_lhs_arg = ['arg' :qualifier 'arg_rest'] -> {'vararg': True}
-            | ['arg' :qualifier ['vid' :name]] -> {'vararg': False, 'vid': name}
+
+ast_lhs_arg = ['arg' :qualifier 'arg_rest'] -> {'vararg': True, 'qualifier': qualifier}
+            | ['arg' :qualifier ['vid' :name]] -> {'vararg': False, 'vid': name, 'qualifier': qualifier}

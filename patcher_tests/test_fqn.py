@@ -81,6 +81,49 @@ on * sys.exit($x, ...) warn "foo";
             assert output == 'WARNING {}:4 - foo\nWARNING {}:5 - foo\n'.format(py_file, py_file)
 
 
+def test_fqe_call_star_arg_warning():
+    code = """
+import sys
+sys.exit()
+sys.exit(1)
+sys.exit(1,2)
+sys.exit(2, *args)
+a = sys.exit
+"""
+
+    ypatch = """
+on * sys.exit($x, *$y) warn "foo";
+"""
+
+    with using_tmp_file(code) as py_file:
+        with using_tmp_file(ypatch) as ypatch_file:
+            import pdb;pdb.set_trace()
+            output = execute_mypy(py_file, ypatch_file)
+            assert output == 'WARNING {}:6 - foo\n'.format(py_file)
+
+
+def test_fqe_call_double_star_arg_warning():
+    code = """
+import sys
+sys.exit()
+sys.exit(1)
+sys.exit(1,2)
+sys.exit(2, *args)
+sys.exit(*args, **kw)
+sys.exit(2, *args, **kw)
+a = sys.exit
+"""
+
+    ypatch = """
+on * sys.exit($x, *$y, **$kw) warn "foo";
+"""
+
+    with using_tmp_file(code) as py_file:
+        with using_tmp_file(ypatch) as ypatch_file:
+            output = execute_mypy(py_file, ypatch_file)
+            assert output == 'WARNING {}:8 - foo\n'.format(py_file)
+
+
 def test_typed_call_args_warning():
     code = """
 class X(object):
