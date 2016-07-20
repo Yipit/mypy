@@ -61,6 +61,7 @@ on * sys.exit($x) warn "foo";
             output = execute_mypy(py_file, ypatch_file)
             assert output == 'WARNING {}:4 - foo\n'.format(py_file)
 
+
 def test_fqe_call_var_arg_warning():
     code = """
 import sys

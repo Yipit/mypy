@@ -71,41 +71,6 @@ def warn_call_template(fqe, message, min_arity, arity, visitor, mypy_node, redba
             red_node = redbaron.find_by_position((mypy_node.line,1))
             print("WARNING " + visitor.file_path + ":" + str(mypy_node.line) + " - " + message)
 
-# warn_fqe_template = """
-# def f(visitor, callee, mypy_node, redbaron):
-#     if not visitor.is_local(callee) and callee in visitor.imports.keys() and visitor.imports[callee] == {fqe}:
-#         red_node = redbaron.find_by_position((mypy_node.line,1))
-#         print("WARNING " + visitor.file_path + ":" + str(mypy_node.line) + " - " + {message})
-
-#     if mypy_node.callee.expr.node.type.type.fullname() == 'test3.v1.Pipe' and expr.callee.name == 'foo':
-#         #     node = [n for n in red.find_all('AtomtrailersNode') if n.absolute_bounding_box.top_left.line == expr.line]
-#         #     assert len(node) == 1
-#         #     node = node[0]
-#         #     import pdb;pdb.set_trace()
-#         #     pass
-
-#     if not visitor.is_local(varname) and varname in visitor.imports.keys() and visitor.imports[varname] == {fqe}:
-#         red_node = redbaron.find_by_position((mypy_node.line,1))
-#         print("WARNING " + visitor.file_path + ":" + str(mypy_node.line) + " - " + {message})
-# """
-
-# warning_template = """print("WARNING " + visitor.file_path + ":" + str(mypy_node.line) + " - " + {message})"""
-
-#  def transform_return_stmt(self, mypy_visitor, mypy_node, redb):
-#      if 'app_filter' in mypy_visitor.current_decorators:
-#          node = [n for n in redb.find_all('return') if n.absolute_bounding_box.top_left.line == mypy_node.line]
-#          assert len(node) == 1
-#          node = node[0]
-#          import pdb;pdb.set_trace()
-#          node.value = 'self ,' + str(node.value)
-
-# def transform_return_stmt(self, mypy_visitor, mypy_node, redb):
-#     pass
-
-# def transform_call_expr(self, mypy_visitor, mypy_node, redb):
-#     pass
-
-
 
 class Generator(object):
     def __init__(self):
@@ -126,10 +91,6 @@ class Generator(object):
             self._add_method('call', functools.partial(warn_call_template, fqe, msg, len(args)-1, len(args))) # -1: don't count the vararg itself
         else:
             self._add_method('call', functools.partial(warn_call_template, fqe, msg, float('+inf'), len(args)))
-        # source = class_template.format(name="Transformer", methods='\n    '.join(self.methods))
-        # obj = compile(source, "<eval>", 'exec')
-        # eval(obj, self.mod.__dict__)
-        pass
 
 
 def get_transformer_for(ypatch_file):
@@ -152,10 +113,3 @@ def get_transformer_for(ypatch_file):
     ast, err = parser.apply("ast_start")
     # print(ast, err)
     return parser.g.tr
-
-
-# print(Parser('on * [sheqel.Sheqel].write_if_new => foo();').apply("start"))
-# print(Parser('on * return($x) => foo();').apply("start"))
-# print(Parser('return ($x, ...)').apply("return_pattern"))
-# print(Parser('return (x)').apply("return_pattern"))
-# print(Parser('on * return ([$x, $y]) => return (self, $y);').apply("start"))
