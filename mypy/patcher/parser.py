@@ -46,15 +46,18 @@ class CodeTransformer(object):
         for tr in self.transformers['member']:
             tr(visitor, l, r, mypy_node, redbaron)
 
+
 def warn_name_fqe_template(fqe, message, visitor, varname, mypy_node, redbaron):
     if not visitor.is_local(varname) and varname in visitor.imports.keys() and visitor.imports[varname] == fqe:
         red_node = redbaron.find_by_position((mypy_node.line,1))
         print("WARNING " + visitor.file_path + ":" + str(mypy_node.line) + " - " + message)
 
+
 def warn_member_fqe_template(fqe, message, visitor, l, r, mypy_node, redbaron):
     if not visitor.is_local(l) and l in visitor.imports.keys() and (visitor.imports[l] + '.' + r) == fqe:
         red_node = redbaron.find_by_position((mypy_node.line,1))
         print("WARNING " + visitor.file_path + ":" + str(mypy_node.line) + " - " + message)
+
 
 def warn_call_template(fqe, message, min_arity, arity, visitor, mypy_node, redbaron):
     if isinstance(mypy_node.callee, MemberExpr) and hasattr(mypy_node.callee.expr, 'name'): # call in the format 'foo.bar()' -- e.g. not in (a+b).bar()
