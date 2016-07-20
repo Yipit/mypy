@@ -1354,15 +1354,15 @@ def dispatch(sources: List[BuildSource], manager: BuildManager) -> None:
     process_graph(graph, manager)
 
     if manager.yipit_patch:
-        yipit_patch_modules(graph, manager.yipit_patch)
+        yipit_patch_modules(graph, manager.yipit_patch, manager.follow_only, manager.source_set.source_paths)
         sys.exit(0)
 
-def yipit_patch_modules(graph, yipit_patch):
+def yipit_patch_modules(graph, yipit_patch, follow_only, paths):
     from .patcher import visitor, parser
     from redbaron import RedBaron
 
     tr = parser.get_transformer_for(yipit_patch)
-    for id, x in [(id, item) for id, item in graph.items() if id not in ['abc', 'builtins', 'typing']]:
+    for id, x in [(id, item) for id, item in graph.items() if id in follow_only or item.xpath in paths]:
         with open(x.xpath) as f:
             red = RedBaron(f.read())
         an = visitor.PatcherVisitor(x.xpath, x.id, red, tr)
