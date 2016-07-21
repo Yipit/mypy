@@ -176,6 +176,7 @@ def test_fqe_subst_regular_import():
     code = """
 import sys
 sys.exit
+foo.sys.exit
 print( 1, \
     sys.exit)
 print(sys.exit + nonsys.exit + sys.exiting)
@@ -195,6 +196,7 @@ on * sys.exit => new_exit;
             assert content == """
 import sys
 sys.new_exit
+foo.sys.exit
 print( 1, \
     sys.new_exit)
 print(sys.new_exit + nonsys.exit + sys.exiting)
@@ -225,7 +227,7 @@ on * sys.exit => new_exit;
     with using_tmp_file(code) as py_file:
         with using_tmp_file(ypatch) as ypatch_file:
             _, content = execute_mypy(py_file, ypatch_file)
-            content == """
+            assert content == """
 import sys as foo
 foo.new_exit
 print( 1, \
@@ -258,8 +260,8 @@ on * sys.exit => new_exit;
     with using_tmp_file(code) as py_file:
         with using_tmp_file(ypatch) as ypatch_file:
             _, content = execute_mypy(py_file, ypatch_file)
-            content == """
-from sys import exit
+            assert content == """
+from sys import new_exit
 new_exit
 print( 1, \
     new_exit + sys.exit)

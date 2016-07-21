@@ -6,6 +6,10 @@ import re
 from mypy.nodes import MemberExpr
 from mypy.types import AnyType
 from functools import partial
+from token import OP
+from .tokenizer import tokenize, untokenize
+from io import BytesIO
+
 
 class CodeTransformer(object):
     def __init__(self):
@@ -48,16 +52,54 @@ class CodeTransformer(object):
             tr(visitor, l, r, mypy_node, source_lines)
 
 
+## Actions functions
 def warning_action(message, visitor, mypy_node, source_lines, *_):
     print("WARNING " + visitor.file_path + ":" + str(mypy_node.line) + " - " + message)
 
 
+def _substitute_token(old_value, new_value, line):
 
-def subst_member_fqe_action(lfqe, pyid, visitor, mypy_node, source_lines, l=None, r=None):
+    def tokens_match(old, tk):
+        for idx, t in enumerate(old):
+            if t.type != tk[idx].type or t.string != tk[idx].string:
+                return False
+        return True
+
+    result = []
+    tks = [t for t in tokenize(BytesIO(line.encode('utf-8')).readline)]
+    old_tks = [t for t in tokenize(BytesIO(old_value.encode('utf-8')).readline)][1:-1]
+    new_tks = [t for t in tokenize(BytesIO(new_value.encode('utf-8')).readline)][1:-1]
+
+    idx = 0
+    prev_is_dot = False
+    while idx < len(tks):
+        if not prev_is_dot and tokens_match(old_tks, tks[idx:]):
+            result.extend([(tkn, tstr) for tkn, tstr, _, _, _ in new_tks])
+            idx += len(old_tks)
+            prev_is_dot = False
+        else:
+            result.append((tks[idx].type, tks[idx].string))
+            if tks[idx].type == OP and tks[idx].string == '.':
+                prev_is_dot = True
+            else:
+                prev_is_dot = False
+            idx += 1
+
+    return untokenize(result).decode('utf-8')
+
+
+def subst_member_fqe_action(lfqe, pyid, visitor, mypy_node, source_lines, l, r):
     full_name = l + '.' + r
     line = source_lines[mypy_node.line-1]
-    source_lines[mypy_node.line-1] = re.sub(r'\b{}\b'.format(lfqe), l + '.' + pyid, line)
+    source_lines[mypy_node.line-1] = _substitute_token(l + '.' + r, l + '.' + pyid, line)
 
+def subst_name_fqe_action(lfqe, pyid, visitor, mypy_node, source_lines):
+    name = lfqe.split('.')[-1]
+    line = source_lines[mypy_node.line-1]
+    source_lines[mypy_node.line-1] = _substitute_token(name, pyid, line)
+
+
+## stage 2 matching functions
 
 def name_fqe_template(action, fqe, visitor, varname, mypy_node, source_lines):
     if not visitor.is_local(varname) and varname in visitor.imports.keys() and visitor.imports[varname] == fqe:
@@ -129,12 +171,11 @@ class Generator(object):
         self._add_method('member', partial(member_fqe_template, warning_f, fqe))
 
     def subst_fqe(self, fqe, pyid):
-        subst_f = partial(subst_member_fqe_action, fqe, pyid)
-        self._add_method('import', partial(name_fqe_template, subst_f, fqe))
-        self._add_method('import_from', partial(name_fqe_template, subst_f, fqe))
-        self._add_method('import_all', partial(name_fqe_template, subst_f, fqe))
-        self._add_method('name', partial(name_fqe_template, subst_f, fqe))
-        self._add_method('member', partial(member_fqe_template, subst_f, fqe))
+        self._add_method('import', partial(name_fqe_template, partial(subst_name_fqe_action, fqe, pyid), fqe))
+        self._add_method('import_from', partial(name_fqe_template, partial(subst_name_fqe_action, fqe, pyid), fqe))
+        self._add_method('import_all', partial(name_fqe_template, partial(subst_name_fqe_action, fqe, pyid), fqe))
+        self._add_method('name', partial(name_fqe_template, partial(subst_name_fqe_action, fqe, pyid), fqe))
+        self._add_method('member', partial(member_fqe_template, partial(subst_member_fqe_action, fqe, pyid), fqe))
 
     def warning_for_fqe_call(self, fqe, args, msg):
         warning_f = partial(warning_action, msg)
