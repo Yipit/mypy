@@ -29,16 +29,16 @@ def execute_mypy(py_file, ypatch_file):
 
 
 def test_fqe_warning():
+    ypatch = """
+on * sys.exit warn "foo";
+"""
+
+
     code = """
 import sys
 sys.exit(1)
 a = sys.exit
 """
-
-    ypatch = """
-on * sys.exit warn "foo";
-"""
-
     with using_tmp_file(code) as py_file:
         with using_tmp_file(ypatch) as ypatch_file:
             output, _ = execute_mypy(py_file, ypatch_file)
@@ -48,16 +48,16 @@ on * sys.exit warn "foo";
 ################# testing warnings #################
 
 def test_fqe_call_fixed_arg_warning():
+    ypatch = """
+on * sys.exit($x) warn "foo";
+"""
+
     code = """
 import sys
 sys.exit()
 sys.exit(1)
 sys.exit(1,2)
 a = sys.exit
-"""
-
-    ypatch = """
-on * sys.exit($x) warn "foo";
 """
 
     with using_tmp_file(code) as py_file:
@@ -67,16 +67,16 @@ on * sys.exit($x) warn "foo";
 
 
 def test_fqe_call_var_arg_warning():
+    ypatch = """
+on * sys.exit($x, ...) warn "foo";
+"""
+
     code = """
 import sys
 sys.exit()
 sys.exit(1)
 sys.exit(1,2)
 a = sys.exit
-"""
-
-    ypatch = """
-on * sys.exit($x, ...) warn "foo";
 """
 
     with using_tmp_file(code) as py_file:
@@ -86,6 +86,10 @@ on * sys.exit($x, ...) warn "foo";
 
 
 def test_fqe_call_star_arg_warning():
+    ypatch = """
+on * sys.exit($x, *$y) warn "foo";
+"""
+
     code = """
 import sys
 sys.exit()
@@ -95,10 +99,6 @@ sys.exit(2, *args)
 a = sys.exit
 """
 
-    ypatch = """
-on * sys.exit($x, *$y) warn "foo";
-"""
-
     with using_tmp_file(code) as py_file:
         with using_tmp_file(ypatch) as ypatch_file:
             output, _ = execute_mypy(py_file, ypatch_file)
@@ -106,6 +106,10 @@ on * sys.exit($x, *$y) warn "foo";
 
 
 def test_fqe_call_double_star_arg_warning():
+    ypatch = """
+on * sys.exit($x, *$y, **$kw) warn "foo";
+"""
+
     code = """
 import sys
 sys.exit()
@@ -117,10 +121,6 @@ sys.exit(2, *args, **kw)
 a = sys.exit
 """
 
-    ypatch = """
-on * sys.exit($x, *$y, **$kw) warn "foo";
-"""
-
     with using_tmp_file(code) as py_file:
         with using_tmp_file(ypatch) as ypatch_file:
             output, _ = execute_mypy(py_file, ypatch_file)
@@ -128,6 +128,10 @@ on * sys.exit($x, *$y, **$kw) warn "foo";
 
 
 def test_typed_call_args_warning():
+    ypatch = """
+on * [__main__.X].bar($x, $y) warn "foo";
+"""
+
     code = """
 class X(object):
     def foo(self):
@@ -136,10 +140,6 @@ class X(object):
         self.bar(1)
         self.bar(1,2)
         self.bar(1,2,3)
-"""
-
-    ypatch = """
-on * [__main__.X].bar($x, $y) warn "foo";
 """
 
     with using_tmp_file(code) as py_file:
@@ -149,6 +149,10 @@ on * [__main__.X].bar($x, $y) warn "foo";
 
 
 def test_typed_call_varargs_warning():
+    ypatch = """
+on * [__main__.X].bar($x, $y, ...) warn "foo";
+"""
+
     code = """
 class X(object):
     def foo(self):
@@ -157,10 +161,6 @@ class X(object):
         self.bar(1)
         self.bar(1,2)
         self.bar(1,2,3)
-"""
-
-    ypatch = """
-on * [__main__.X].bar($x, $y, ...) warn "foo";
 """
 
     with using_tmp_file(code) as py_file:
@@ -173,6 +173,10 @@ on * [__main__.X].bar($x, $y, ...) warn "foo";
 
 
 def test_fqe_subst_regular_import():
+    ypatch = """
+on * sys.exit => new_exit;
+"""
+
     code = """
 import sys
 sys.exit
@@ -184,10 +188,6 @@ def bar(sys):
     return sys.exit
 def baz(x):
     return sys.exit
-"""
-
-    ypatch = """
-on * sys.exit => new_exit;
 """
 
     with using_tmp_file(code) as py_file:
@@ -208,6 +208,10 @@ def baz(x):
 
 
 def test_fqe_subst_import_as():
+    ypatch = """
+on * sys.exit => new_exit;
+"""
+
     code = """
 import sys as foo
 foo.exit
@@ -218,10 +222,6 @@ def bar(foo):
     return foo.exit
 def baz(x):
     return foo.exit
-"""
-
-    ypatch = """
-on * sys.exit => new_exit;
 """
 
     with using_tmp_file(code) as py_file:
@@ -241,6 +241,10 @@ def baz(x):
 
 
 def test_fqe_subst_import_from():
+    ypatch = """
+on * sys.exit => new_exit;
+"""
+
     code = """
 from sys import exit
 exit
@@ -251,10 +255,6 @@ def bar(sys, exit):
     return sys.exit, exit
 def baz(x):
     return sys.exit, exit
-"""
-
-    ypatch = """
-on * sys.exit => new_exit;
 """
 
     with using_tmp_file(code) as py_file:
