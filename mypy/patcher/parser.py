@@ -3,12 +3,16 @@ from pymeta.runtime import OMetaBase
 from pymeta.builder import TreeBuilder, moduleFromGrammar
 import os, sys
 import re
-from mypy.nodes import MemberExpr
+from mypy.nodes import MemberExpr, NameExpr
 from mypy.types import AnyType
 from functools import partial
 from token import OP
 from .tokenizer import tokenize, untokenize
 from io import BytesIO
+
+pg = grammar.OMetaGrammar(open(os.path.join(os.path.dirname(__file__),"pattern_grammar.g")).read())
+tree = pg.parseGrammar('Patcher', builder.TreeBuilder)
+Parser = moduleFromGrammar(tree, 'Patcher', OMetaBase, {})
 
 
 class CodeTransformer(object):
@@ -88,6 +92,34 @@ def _substitute_token(old_value, new_value, line):
     return untokenize(result).decode('utf-8')
 
 
+
+def _subst_line(visitor, mypy_node, line, name, pyid, largs, rargs):
+    parser = Parser(line)
+    res, err = parser.apply("python_line", name, len(largs))
+    for begin, end, margs in res:
+        bound_args = {} # associate $K with values found in margs and the visitor.current_function_parameters
+        for idx, a in enumerate(largs):
+            if a == 'arg_rest':
+                bound_args['rest'] = margs[idx:]
+            elif 'vid' in a:
+                bound_args[a['vid']] = margs[idx]
+            else:
+                raise Exception("?")
+        res_args = []
+        for idx, a in enumerate(rargs):
+            if a == 'arg_rest':
+                res_args.extend(margs[idx:])
+            elif 'vid' in a and a['vid'].isdigit():
+                res_args.append(visitor.get_parameter(int(a['vid'])))
+            elif 'vid' in a:
+                res_args.append(bound_args[a['vid']])
+            else:
+                raise Exception('?')
+        line = line[0:begin] + '{}({})'.format(pyid, ','.join(res_args)) + line[end:]
+    return line
+
+##########################
+
 def subst_member_fqe_action(lfqe, pyid, visitor, mypy_node, source_lines, l, r):
     full_name = l + '.' + r
     line = source_lines[mypy_node.line-1]
@@ -97,6 +129,19 @@ def subst_name_fqe_action(lfqe, pyid, visitor, mypy_node, source_lines):
     name = lfqe.split('.')[-1]
     line = source_lines[mypy_node.line-1]
     source_lines[mypy_node.line-1] = _substitute_token(name, pyid, line)
+
+
+def subst_call_action(lfqe, pyid, largs, rargs, visitor, mypy_node, source_lines):
+    if len(largs) == 0 and len(rargs) == 0:
+        # substitute the callee term
+        # subst_name_fqe_action(lfqe, pyid, visitor, mypy_node, source_lines)
+        name = lfqe.split('.')[-1]
+        line = source_lines[mypy_node.line-1]
+        source_lines[mypy_node.line-1] = _substitute_token(name, pyid, line)
+    else:
+        name = lfqe.split('.')[-1]
+        line = source_lines[mypy_node.line-1]
+        source_lines[mypy_node.line-1] = _subst_line(visitor, mypy_node, line, name, pyid, largs, rargs)
 
 
 ## stage 2 matching functions
@@ -136,9 +181,30 @@ def call_template(action, fqe, min_arity, arity, visitor, mypy_node, source_line
            star_pos == node_star_pos and \
            star_star_pos == node_star_star_pos:
             action(visitor, mypy_node, source_lines)
+    elif isinstance(mypy_node.callee, NameExpr): # call in the format 'foo()'
+        local_name = str(mypy_node.callee.name)
+
+        node_star = [idx for idx, arg_kind in enumerate(mypy_node.arg_kinds) if arg_kind == 2]
+        if node_star:
+            node_star_pos = node_star[0]
+        else:
+            node_star_pos = None
+
+        node_star_star = [idx for idx, arg_kind in enumerate(mypy_node.arg_kinds) if arg_kind == 4]
+        if node_star_star:
+            node_star_star_pos = node_star_star[0]
+        else:
+            node_star_star_pos = None
+
+        if (not visitor.is_local(local_name)) and \
+           local_name in visitor.imports.keys() and \
+           (len(mypy_node.args) == arity or len(mypy_node.args) >= min_arity) and\
+           star_pos == node_star_pos and \
+           star_star_pos == node_star_star_pos:
+            action(visitor, mypy_node, source_lines)
 
 
-def typed_call_template(action, rtype, method_name, min_arity, arity, visitor, mypy_node, source_lines):
+def typed_call_template(action, ltype, method_name, min_arity, arity, visitor, mypy_node, source_lines):
     if isinstance(mypy_node.callee, MemberExpr) and hasattr(mypy_node.callee.expr, 'name'): # call in the format 'foo.bar()' -- e.g. not in (a+b).bar()
         rec_type = mypy_node.callee.expr.node.type
         if type(rec_type) == AnyType:
@@ -148,7 +214,7 @@ def typed_call_template(action, rtype, method_name, min_arity, arity, visitor, m
 
         callee = str(mypy_node.callee.name)
         if callee == method_name and \
-           rtype == rec_type_name and \
+           ltype == rec_type_name and \
            (len(mypy_node.args) == arity or len(mypy_node.args) >= min_arity):
             action(visitor, mypy_node, source_lines)
 
@@ -199,20 +265,38 @@ class Generator(object):
             self._add_method('call', partial(call_template, warning_f, fqe, float('+inf'), len(args), star_pos=star_pos, star_star_pos=star_star_pos))
 
 
-    def warning_for_typed_call(self, rtype, method_name, args, msg):
+    def warning_for_typed_call(self, ltype, method_name, args, msg):
         warning_f = partial(warning_action, msg)
 
         if any([x['vararg'] for x in args]):
             # -1: don't count the vararg itself
-            self._add_method('call', partial(typed_call_template, warning_f, rtype, method_name, len(args)-1, len(args)))
+            self._add_method('call', partial(typed_call_template, warning_f, ltype, method_name, len(args)-1, len(args)))
         else:
-            self._add_method('call', partial(typed_call_template, warning_f, rtype, method_name, float('+inf'), len(args)))
+            self._add_method('call', partial(typed_call_template, warning_f, ltype, method_name, float('+inf'), len(args)))
+
+
+    def subst_fqe_call(self, lfqe, pyid, largs, rargs):
+        star_args = [idx for idx, arg in enumerate(largs) if arg['qualifier'] == '*']
+        star_star_args = [idx for idx, arg in enumerate(largs) if arg['qualifier'] == '**']
+        if star_args:
+            star_pos = star_args[0]
+        else:
+            star_pos = None
+
+        if star_star_args:
+            star_star_pos = star_star_args[0]
+        else:
+            star_star_pos = None
+
+        subst_f = partial(subst_call_action, lfqe, pyid, largs, rargs)
+        if any([x['vararg'] for x in largs]):
+            # -1: don't count the vararg itself
+            self._add_method('call', partial(call_template, subst_f, lfqe, len(largs)-1, len(largs), star_pos=star_pos, star_star_pos=star_star_pos))
+        else:
+            self._add_method('call', partial(call_template, subst_f, lfqe, float('+inf'), len(largs), star_pos=star_pos, star_star_pos=star_star_pos))
 
 
 def get_transformer_for(ypatch_file):
-    pg = grammar.OMetaGrammar(open(os.path.join(os.path.dirname(__file__),"pattern_grammar.g")).read())
-    tree = pg.parseGrammar('Patcher', builder.TreeBuilder)
-    Parser = moduleFromGrammar(tree, 'Patcher', OMetaBase, {})
 
     ## debugging pymeta output
     # fp = open(os.path.join(os.path.dirname(__file__), 'compiled.py'), 'w')
@@ -229,3 +313,10 @@ def get_transformer_for(ypatch_file):
     ast, err = parser.apply("ast_start")
     # print(ast, err)
     return parser.g.tr
+
+if __name__ == '__main__':
+    import sys
+    print(repr(sys.argv[1]), repr(sys.argv[2]), int(sys.argv[3]))
+
+    parser = Parser(sys.argv[1])
+    print(parser.apply("python_line", sys.argv[2], int(sys.argv[3])))

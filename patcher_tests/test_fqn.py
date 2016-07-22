@@ -271,3 +271,100 @@ def bar(sys, exit):
 def baz(x):
     return sys.exit, new_exit
 """
+
+
+def test_fqe_call_subst_noargs():
+    ypatch = """
+on * sys.exit() => new_exit();
+"""
+
+    code = """
+from sys import exit
+a = exit
+exit()
+exit(1)
+exit(1,2)
+"""
+
+    with using_tmp_file(code) as py_file:
+        with using_tmp_file(ypatch) as ypatch_file:
+            _, content = execute_mypy(py_file, ypatch_file)
+            assert content == """
+from sys import exit
+a = exit
+new_exit()
+exit(1)
+exit(1,2)
+"""
+
+def test_fqe_call_subst_args():
+    ypatch = """
+on * sys.exit($x, $y) => new_exit($y, $x);
+"""
+
+    code = """
+from sys import exit
+a = exit
+exit()
+exit(1)
+exit(1,2)
+"""
+
+    with using_tmp_file(code) as py_file:
+        with using_tmp_file(ypatch) as ypatch_file:
+            _, content = execute_mypy(py_file, ypatch_file)
+            assert content == """
+from sys import exit
+a = exit
+exit()
+exit(1)
+new_exit(2,1)
+"""
+
+# def test_fqe_call_subst_varargs():
+#     ypatch = """
+# on * sys.exit($x, ...) => new_exit($x, ...);
+# """
+
+#     code = """
+# from sys import exit
+# a = exit
+# exit()
+# exit(1)
+# exit(1,2)
+# """
+
+#     with using_tmp_file(code) as py_file:
+#         with using_tmp_file(ypatch) as ypatch_file:
+#             output, _ = execute_mypy(py_file, ypatch_file)
+#             assert content == """
+# from sys import exit
+# a = exit
+# exit()
+# new_exit(1)
+# new_new_exit(2,1)
+# """
+
+
+## remaining tests
+
+## on * [__main__.X].write($x, $y) => write($x, key=$y)
+## on * [__main__.X].bar(z=$x) =>bar(k=$x);
+## on * [__main__.X].bar($x) =>bar($x, $1);
+## on * [__main__.X].bar(...) => bar2(...);
+## on * [__main__.X].bar($x) delete;
+## on * [__main__.X].write($x) => write(*$x);
+## on [__main__.X].bar($m) => bar(*$m);
+## on subclass __main__.X def foo(...) warn "foobar";
+## on requirements +python-dateutil==1.5
+## on * return $x => return $1, $x;
+
+#### TODO
+# - python calls may span many lines:
+#    e.g.
+#         foo(very_long_arg,
+#             very_long_arg2)
+#
+#   We need to translate the entire box: just working on the single line of the node doesn't work.
+#   -we may be able to do this by checking the .line of the arg nodes
+#

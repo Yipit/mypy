@@ -1,11 +1,24 @@
+C = " #################### elementary rules ############################ "
+
 letter_or_ = letter
            | "_"
 
 letter_or_digit_or_ = letter_or_ | digit
 
+quoted_string  = spaces '"' (lit_escaped | ~'"' :x)*:xs '"' -> ["string", ''.join(xs)]
+
+lit_escaped = ~'"' '\\' :x -> "\\" + x
+
+quoted_string_single  = spaces '\'' (lit_escaped_single | ~'\'' :x)*:xs '\'' -> ["string", ''.join(xs)]
+
+lit_escaped_single = ~'\'' '\\' :x -> "\\" + x
+
 py_name = spaces pyid:x ("." pyid:y -> "." + y)*:xs -> ''.join([x] + xs)
 
 pyid = letter_or_:x letter_or_digit_or_*:xs -> ''.join([x] + xs)
+
+
+C = " #################### patching rules ############################ "
 
 
 start = stmt+:rs -> ["rules", rs]
@@ -67,20 +80,19 @@ rhs_arg_el = varargs_qualifier:q rhs_arg:x -> ['arg', q, x]
 rhs_arg = token("$") letter+:x -> ['vid', ''.join(x)]
         | token("$") digit+:x -> ['vparam', ''.join(x)]
         | py_name:x -> ['pyid', x]
+        | digit+:d -> ['number', ''.join(d)]
         | token("...") -> 'arg_rest'
 
 
-quoted_string  = spaces '"' (lit_escaped | ~'"' :x)*:xs '"' -> ["string", ''.join(xs)]
 
-lit_escaped = ~'"' '\\' :x -> "\\" + x
-
-
+C = " #################### ast rules ############################ "
 
 ast_start = ['rules' [ast_rule+]]
 
 ast_rule = ['rule' 'anywhere' ['fqe' :fqe] fqe_action(fqe)]
          | ['rule' 'anywhere' ['fqe_call' ['call' :fqe ast_lhs_args:a]] fqe_call_action(fqe, a)]
-         | ['rule' 'anywhere' ['typed' :type ['call' :method ast_lhs_args:a]] ['warning' ['string' :msg]]] -> self.g.warning_for_typed_call(type, method, a, msg)
+         | ['rule' 'anywhere' ['typed' :type ['call' :method ast_lhs_args:a]] typed_call_action(type, method, a)]
+
 
 ast_lhs_args = [ast_lhs_arg*:a] -> a
 
@@ -94,8 +106,32 @@ fqe_action :lfqe = ['warning' ['string' :msg]] -> self.g.warning_for_fqe(lfqe, m
 fqe_call_action :lfqe :la =  ['warning' ['string' :msg]] -> self.g.warning_for_fqe_call(lfqe[0], la, msg)
                           | ['call' :rfqe ast_rhs_args:ra] -> self.g.subst_fqe_call(lfqe[0], rfqe, la, ra)
 
+
+typed_call_action :type :lm :la = ['warning' ['string' :msg]] -> self.g.warning_for_typed_call(type[0], lm[0], la, msg)
+                                | ['call' :rfqe ast_rhs_args:ra] -> self.g.subst_for_typed_call(type[0], lm[0], la, rfqe, ra)
+
 ast_rhs_args = [ast_rhs_arg*:a] -> a
 
 ast_rhs_arg = ['arg' :qualifier 'arg_rest'] -> {'vararg': True, 'qualifier': qualifier}
             | ['arg' :qualifier ['vid' :name]] -> {'vararg': False, 'vid': name, 'qualifier': qualifier}
             | ['arg' :qualifier ['pyid' :name]] -> {'vararg': False, 'pyid': name, 'qualifier': qualifier}
+
+
+
+C = " #################### python line parsing rules ############################ "
+C = " format:  python_line(str_line, name, arity) => [(initial_pos, final_pos, [arg_str])] "
+C = "                                                                   "
+C = " example: python_line('sys.exit(a,b) exit(c) exit(d.e,f(1))', 'exit', 2) => [(22, 36, ['d.e','f(1)'])]"
+
+python_line :name :arity = python_line_term(name, arity)+:x -> [k for k in filter(lambda e: e, x)]
+
+python_line_term :name :arity = spaces !(self.input.position):p py_name:t ?(name[0] == t) python_line_args(arity):a -> [p, self.input.position, a]
+                              | py_name -> None
+                              | anything:a -> None
+
+python_line_args :arity = token("(") python_line_arg:x (token(',') python_line_arg)*:xs token(")") ?(arity == len([x]+xs)) -> [x]+xs
+                        | token("(") token(")") ?(arity == 0)
+
+python_line_arg = quoted_string | quoted_string_single
+                | (~(token('(') | token(')') | token(',')) anything)+:x token('(') python_line_arg:e token(')') -> ''.join(x) + '(' + e + ')'
+                | (~(token('(') | token(')') | token(',')) anything)+:x -> ''.join(x)
