@@ -307,7 +307,7 @@ from sys import exit
 a = exit
 exit()
 exit(1)
-exit(1,2)
+exit(1, 2)
 """
 
     with using_tmp_file(code) as py_file:
@@ -318,7 +318,7 @@ from sys import exit
 a = exit
 exit()
 exit(1)
-new_exit(2,1)
+new_exit(2, 1)
 """
 
 def test_fqe_call_subst_args_with_calls():
