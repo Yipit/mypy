@@ -115,7 +115,7 @@ def _subst_line(visitor, mypy_node, line, name, pyid, largs, rargs):
                 res_args.append(bound_args[a['vid']])
             else:
                 raise Exception('?')
-        line = line[0:begin] + '{}({})'.format(pyid, ','.join(res_args)) + line[end:]
+        line = line[0:begin] + '{}({})'.format(pyid, ', '.join(res_args)) + line[end:]
     return line
 
 ##########################

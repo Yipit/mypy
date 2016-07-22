@@ -125,13 +125,14 @@ C = " example: python_line('sys.exit(a,b) exit(c) exit(d.e,f(1))', 'exit', 2) =>
 
 python_line :name :arity = python_line_term(name, arity)+:x -> [k for k in filter(lambda e: e, x)]
 
-python_line_term :name :arity = spaces !(self.input.position):p py_name:t ?(name[0] == t) python_line_args(arity):a -> [p, self.input.position, a]
+python_line_term :name :arity = spaces !(self.input.position):p py_name:t ?(name[0] == t) python_line_args:a ?(arity == len(a)) -> [p, self.input.position, a]
                               | py_name -> None
                               | anything:a -> None
 
-python_line_args :arity = token("(") python_line_arg:x (token(',') python_line_arg)*:xs token(")") ?(arity == len([x]+xs)) -> [x]+xs
-                        | token("(") token(")") ?(arity == 0)
+python_line_args = token("(") python_line_arg:x (token(',') python_line_arg)*:xs token(")") -> [x]+xs
+                 | token("(") token(")") -> [None]
 
-python_line_arg = quoted_string | quoted_string_single
-                | (~(token('(') | token(')') | token(',')) anything)+:x token('(') python_line_arg:e token(')') -> ''.join(x) + '(' + e + ')'
-                | (~(token('(') | token(')') | token(',')) anything)+:x -> ''.join(x)
+python_line_arg = quoted_string:x -> repr(x[1])
+                | quoted_string_single:x -> repr(x[1])
+                | (~(token('(') | token(')') | token(',')) anything:a -> a.strip())+:x python_line_args:e -> ''.join(x) + '(' + ', '.join(e) + ')'
+                | (~(token('(') | token(')') | token(',')) anything:a -> a.strip())+:x -> ''.join(x)

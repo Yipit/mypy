@@ -321,6 +321,30 @@ exit(1)
 new_exit(2,1)
 """
 
+def test_fqe_call_subst_args_with_calls():
+    ypatch = """
+on * sys.exit($x, $y, $z) => new_exit($z, $y, $x);
+"""
+
+    code = """
+from sys import exit
+a = exit
+exit()
+exit(f(g(self, "exit")), "foo", bar.baz)
+exit(1,2)
+"""
+
+    with using_tmp_file(code) as py_file:
+        with using_tmp_file(ypatch) as ypatch_file:
+            _, content = execute_mypy(py_file, ypatch_file)
+            assert content == """
+from sys import exit
+a = exit
+exit()
+new_exit(bar.baz, 'foo', f(g(self, 'exit')))
+exit(1,2)
+"""
+
 # def test_fqe_call_subst_varargs():
 #     ypatch = """
 # on * sys.exit($x, ...) => new_exit($x, ...);
