@@ -95,28 +95,28 @@ def _substitute_token(old_value, new_value, line):
 
 def _subst_line(visitor, mypy_node, lines, name, pyid, largs, rargs):
     parser = Parser(lines)
-    res, err = parser.apply("python_line", name, len(largs))
-    for begin, end, margs in res:
-        bound_args = {} # associate $K with values found in margs and the visitor.current_function_parameters
-        for idx, a in enumerate(largs):
-            if a == 'arg_rest':
-                bound_args['rest'] = margs[idx:]
-            elif 'vid' in a:
-                bound_args[a['vid']] = margs[idx]
-            else:
-                raise Exception("?")
-        res_args = []
-        for idx, a in enumerate(rargs):
-            if a == 'arg_rest':
-                res_args.extend(margs[idx:])
-            elif 'vid' in a and a['vid'].isdigit():
-                res_args.append(visitor.get_parameter(int(a['vid'])))
-            elif 'vid' in a:
-                res_args.append(bound_args[a['vid']])
-            else:
-                raise Exception('?')
-        lines = lines[0:begin] + '{}({})'.format(pyid, ', '.join(res_args)) + lines[end:]
-    return lines
+    has_var_arg = any([x['vararg'] for x in largs])
+    res, err = parser.apply("python_line", name, len(largs), has_var_arg)
+    begin, end, margs = res
+    bound_args = {} # associate $K with values found in margs and the visitor.current_function_parameters
+    for idx, a in enumerate(largs):
+        if a['vararg']:
+            bound_args['rest'] = margs[idx:]
+        elif 'vid' in a:
+            bound_args[a['vid']] = margs[idx]
+        else:
+            raise Exception("?")
+    res_args = []
+    for idx, a in enumerate(rargs):
+        if a['vararg']:
+            res_args.extend(bound_args['rest'])
+        elif 'vid' in a and a['vid'].isdigit():
+            res_args.append(visitor.get_parameter(int(a['vid'])))
+        elif 'vid' in a:
+            res_args.append(bound_args[a['vid']])
+        else:
+            raise Exception('?')
+    return lines[0:begin] + '{}({})'.format(pyid, ', '.join(res_args)) + lines[end:]
 
 ##########################
 

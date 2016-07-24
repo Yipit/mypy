@@ -494,6 +494,29 @@ exit()
 new_exit(3, [k, 'a', 1, 'b', {'c': (4, 7, 8), 'd': 5}], 2)
 """
 
+def test_fqe_call_subst_varargs():
+    ypatch = """
+on * sys.exit($x, ...) => new_exit(...);
+"""
+
+    code = """
+from sys import exit
+a = exit
+exit()
+exit(1)
+exit(2,3,4)
+"""
+
+    with using_tmp_file(code) as py_file:
+        with using_tmp_file(ypatch) as ypatch_file:
+            _, content = execute_mypy(py_file, ypatch_file)
+            assert content == """
+from sys import exit
+a = exit
+exit()
+new_exit()
+new_exit(3, 4)
+"""
 
 
 # def test_fqe_call_subst_varargs():
