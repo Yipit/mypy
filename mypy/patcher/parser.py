@@ -140,6 +140,11 @@ def subst_name_fqe_action(lfqe, pyid, visitor, mypy_node, source_lines):
 
 
 def subst_call_action(lfqe, pyid, largs, rargs, visitor, mypy_node, source_lines, target_term):
+
+    # if we are looking for "foo.bar", substitute it for "foo.<pyid>"
+    if '.' in target_term:
+        pyid = '.'.join(target_term.split('.')[:-1]) + '.' + pyid
+
     if len(largs) == 0 and len(rargs) == 0:
         # substitute the callee term
         # subst_name_fqe_action(lfqe, pyid, visitor, mypy_node, source_lines)
