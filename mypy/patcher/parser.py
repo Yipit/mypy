@@ -93,8 +93,8 @@ def _substitute_token(old_value, new_value, line):
 
 
 
-def _subst_line(visitor, mypy_node, line, name, pyid, largs, rargs):
-    parser = Parser(line)
+def _subst_line(visitor, mypy_node, lines, name, pyid, largs, rargs):
+    parser = Parser(lines)
     res, err = parser.apply("python_line", name, len(largs))
     for begin, end, margs in res:
         bound_args = {} # associate $K with values found in margs and the visitor.current_function_parameters
@@ -115,8 +115,8 @@ def _subst_line(visitor, mypy_node, line, name, pyid, largs, rargs):
                 res_args.append(bound_args[a['vid']])
             else:
                 raise Exception('?')
-        line = line[0:begin] + '{}({})'.format(pyid, ', '.join(res_args)) + line[end:]
-    return line
+        lines = lines[0:begin] + '{}({})'.format(pyid, ', '.join(res_args)) + lines[end:]
+    return lines
 
 ##########################
 
@@ -140,9 +140,11 @@ def subst_call_action(lfqe, pyid, largs, rargs, visitor, mypy_node, source_lines
         source_lines[mypy_node.line-1] = _substitute_token(name, pyid, line)
     else:
         name = lfqe.split('.')[-1]
-        line = source_lines[mypy_node.line-1]
-        source_lines[mypy_node.line-1] = _subst_line(visitor, mypy_node, line, name, pyid, largs, rargs)
-
+        lines = '\n'.join(source_lines[mypy_node.line-1:])
+        new_lines = _subst_line(visitor, mypy_node, lines, name, pyid, largs, rargs)
+        del source_lines[mypy_node.line-1:]
+        for i, line in enumerate(new_lines.split('\n')):
+            source_lines.append(line)
 
 ## stage 2 matching functions
 

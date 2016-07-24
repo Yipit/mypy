@@ -125,14 +125,32 @@ C = " example: python_line('sys.exit(a,b) exit(c) exit(d.e,f(1))', 'exit', 2) =>
 
 python_line :name :arity = python_line_term(name, arity)+:x -> [k for k in filter(lambda e: e, x)]
 
-python_line_term :name :arity = spaces !(self.input.position):p py_name:t ?(name[0] == t) python_line_args:a ?(arity == len(a)) -> [p, self.input.position, a]
+python_line_term :name :arity = spaces !(self.input.position):p py_name:t ?(name[0] == t) python_line_sig:a  ?(arity == len(a)) -> [p, self.input.position, a]
                               | py_name -> None
                               | anything:a -> None
 
-python_line_args = token("(") python_line_arg:x (token(',') python_line_arg)*:xs token(")") -> [x]+xs
-                 | token("(") token(")") -> [None]
+python_line_sig = token("(") python_line_args:a token(")") -> a
+
+python_line_args = python_line_arg:x (token(',') python_line_arg)*:xs -> [x]+xs
+                 | -> [None]
 
 python_line_arg = quoted_string:x -> repr(x[1])
-                | quoted_string_single:x -> repr(x[1])
-                | (~(token('(') | token(')') | token(',')) anything:a -> a.strip())+:x python_line_args:e -> ''.join(x) + '(' + ', '.join(e) + ')'
-                | (~(token('(') | token(')') | token(',')) anything:a -> a.strip())+:x -> ''.join(x)
+   | quoted_string_single:x -> repr(x[1])
+   | python_square_bracket_arg
+   | python_curly_bracket_arg
+   | python_paren_bracket_arg
+   | (~(token('(') | token(')') | token('[') | token(']') | token('{') | token('}') | token(',')) anything:a -> a.strip())+:x python_line_sig:e -> ''.join(x) + '(' + ', '.join(e) + ')'
+   | (~(token('(') | token(')') | token('[') | token(']') | token('{') | token('}') | token(',')) anything:a -> a.strip())+:x  -> ''.join(x)
+
+python_square_bracket_arg = token('[') python_list_contents:a token(']') -> '[' + ', '.join(a) + ']'
+python_list_contents = python_line_args
+
+python_paren_bracket_arg = token('(') python_tuple_contents:a token(')') -> '(' + ', '.join(a) + ')'
+python_tuple_contents = python_line_args
+
+
+python_curly_bracket_arg = token('{') python_curly_contents:a token('}') -> '{' + ', '.join(a) + '}'
+python_curly_contents = python_curly_content:x (token(",") python_curly_content)*:xs -> [x] + xs
+
+python_curly_content = python_line_arg:a token(':') python_line_arg:b -> a + ': ' + b
+                     | python_line_arg

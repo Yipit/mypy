@@ -297,7 +297,7 @@ exit(1)
 exit(1,2)
 """
 
-def test_fqe_call_subst_args():
+def test_fqe_call_subst_args_simple():
     ypatch = """
 on * sys.exit($x, $y) => new_exit($y, $x);
 """
@@ -368,6 +368,85 @@ exit()
 new_exit(bar.baz, new_exit(3, 2, 1), f(g(a, b)))
 exit(1,2)
 """
+
+
+def test_fqe_call_subst_spaning_many_lines_with_dict():
+    ypatch = """
+on * sys.exit($x, $y) => new_exit($y, $x);
+"""
+
+    code = """
+from sys import exit
+a = exit
+exit()
+exit({"a": 1,
+      "b": 2},
+       3, exit(a,b))
+"""
+
+    with using_tmp_file(code) as py_file:
+        with using_tmp_file(ypatch) as ypatch_file:
+            _, content = execute_mypy(py_file, ypatch_file)
+            assert content == """
+from sys import exit
+a = exit
+exit()
+exit({"a": 1,
+      "b": 2},
+       3, new_exit(b, a))
+"""
+
+
+def test_fqe_call_subst_spaning_many_lines_with_nested_dict():
+    ypatch = """
+on * sys.exit($x, $y, $z) => new_exit($z, $x, $y);
+"""
+
+    code = """
+from sys import exit
+a = exit
+exit()
+exit({"a": 1,
+      "b": {"c": 4, "d": 5}},
+      2, 3)
+"""
+
+    with using_tmp_file(code) as py_file:
+        with using_tmp_file(ypatch) as ypatch_file:
+            _, content = execute_mypy(py_file, ypatch_file)
+            assert content == """
+from sys import exit
+a = exit
+exit()
+new_exit(3, {'a': 1, 'b': {'c': 4, 'd': 5}}, 2)
+"""
+
+def test_fqe_call_subst_spaning_many_lines_with_nested_list_dict_and_tuple():
+    ypatch = """
+on * sys.exit($x, $y, $z) => new_exit($z, $x, $y);
+"""
+
+    code = """
+from sys import exit
+a = exit
+exit()
+exit([k,"a", 1,
+      "b", {"c": (4, 7, 8),
+            "d": 5}],
+      2, 3)
+"""
+
+    with using_tmp_file(code) as py_file:
+        with using_tmp_file(ypatch) as ypatch_file:
+            _, content = execute_mypy(py_file, ypatch_file)
+            assert content == """
+from sys import exit
+a = exit
+exit()
+new_exit(3, [k, 'a', 1, 'b', {'c': (4, 7, 8), 'd': 5}], 2)
+"""
+
+
 
 # def test_fqe_call_subst_varargs():
 #     ypatch = """
