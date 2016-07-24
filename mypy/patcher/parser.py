@@ -1,5 +1,5 @@
 from pymeta import builder, grammar
-from pymeta.runtime import OMetaBase
+from pymeta.runtime import OMetaBase, _MaybeParseError
 from pymeta.builder import TreeBuilder, moduleFromGrammar
 import os, sys
 import re
@@ -94,9 +94,17 @@ def _substitute_token(old_value, new_value, line):
 
 
 def _subst_line(visitor, mypy_node, lines, name, pyid, largs, rargs):
-    parser = Parser(lines)
     has_var_arg = any([x['vararg'] for x in largs])
-    res, err = parser.apply("python_line", name, len(largs), has_var_arg)
+    line_offset = 0
+    while True:
+        parser = Parser(lines[line_offset:])
+        try:
+            res, err = parser.apply("python_line", name, len(largs), has_var_arg)
+            break
+        except _MaybeParseError:
+            # skip an element of the input and try again
+            Parser(lines[line_offset:])
+            line_offset += parser.apply('python_skip_element')[0]
     begin, end, margs = res
     bound_args = {} # associate $K with values found in margs and the visitor.current_function_parameters
     for idx, a in enumerate(largs):
@@ -116,7 +124,7 @@ def _subst_line(visitor, mypy_node, lines, name, pyid, largs, rargs):
             res_args.append(bound_args[a['vid']])
         else:
             raise Exception('?')
-    return lines[0:begin] + '{}({})'.format(pyid, ', '.join(res_args)) + lines[end:]
+    return lines[0:begin+line_offset] + '{}({})'.format(pyid, ', '.join(res_args)) + lines[line_offset+end:]
 
 ##########################
 

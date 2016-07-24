@@ -125,10 +125,12 @@ C = " example: python_line('sys.exit(a,b) exit(c) exit(d.e,f(1))', 'exit', 2) =>
 
 python_line :name :arity :has_varg = python_line_term(name, arity, has_varg)
 
+python_skip_element = spaces py_name  -> self.input.position-1
+                    | spaces anything -> self.input.position
+
 python_line_term :name :arity :has_varg = spaces !(self.input.position):p py_name:t ?(name[0] == t) python_line_sig:a
+                                  !(print('match', t, a, ((not has_varg and arity[0] == len(a)) or (has_varg and (arity[0]-1) <= len(a)))))
                                   ?((not has_varg and arity[0] == len(a)) or (has_varg and (arity[0]-1) <= len(a))) -> [p, self.input.position, a]
-                              | py_name python_line_term(name, arity[0], has_varg)
-                              | anything python_line_term(name, arity[0], has_varg)
 
 python_line_sig = token("(") python_line_args:a token(")") -> a
 
