@@ -131,17 +131,16 @@ def subst_name_fqe_action(lfqe, pyid, visitor, mypy_node, source_lines):
     source_lines[mypy_node.line-1] = _substitute_token(name, pyid, line)
 
 
-def subst_call_action(lfqe, pyid, largs, rargs, visitor, mypy_node, source_lines):
+def subst_call_action(lfqe, pyid, largs, rargs, visitor, mypy_node, source_lines, target_term):
     if len(largs) == 0 and len(rargs) == 0:
         # substitute the callee term
         # subst_name_fqe_action(lfqe, pyid, visitor, mypy_node, source_lines)
-        name = lfqe.split('.')[-1]
+        # name = lfqe.split('.')[-1]
         line = source_lines[mypy_node.line-1]
-        source_lines[mypy_node.line-1] = _substitute_token(name, pyid, line)
+        source_lines[mypy_node.line-1] = _substitute_token(target_term, pyid, line)
     else:
-        name = lfqe.split('.')[-1]
         lines = '\n'.join(source_lines[mypy_node.line-1:])
-        new_lines = _subst_line(visitor, mypy_node, lines, name, pyid, largs, rargs)
+        new_lines = _subst_line(visitor, mypy_node, lines, target_term, pyid, largs, rargs)
         del source_lines[mypy_node.line-1:]
         for i, line in enumerate(new_lines.split('\n')):
             source_lines.append(line)
@@ -182,7 +181,7 @@ def call_template(action, fqe, min_arity, arity, visitor, mypy_node, source_line
            (len(mypy_node.args) == arity or len(mypy_node.args) >= min_arity) and\
            star_pos == node_star_pos and \
            star_star_pos == node_star_star_pos:
-            action(visitor, mypy_node, source_lines)
+            action(visitor, mypy_node, source_lines, fqe)
     elif isinstance(mypy_node.callee, NameExpr): # call in the format 'foo()'
         local_name = str(mypy_node.callee.name)
 
@@ -203,7 +202,7 @@ def call_template(action, fqe, min_arity, arity, visitor, mypy_node, source_line
            (len(mypy_node.args) == arity or len(mypy_node.args) >= min_arity) and\
            star_pos == node_star_pos and \
            star_star_pos == node_star_star_pos:
-            action(visitor, mypy_node, source_lines)
+            action(visitor, mypy_node, source_lines, local_name)
 
 
 def typed_call_template(action, ltype, method_name, min_arity, arity, visitor, mypy_node, source_lines):

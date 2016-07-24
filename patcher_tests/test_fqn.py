@@ -297,6 +297,54 @@ exit(1)
 exit(1,2)
 """
 
+def test_fqe_call_subst_fully_qualified_name_noargs():
+    ypatch = """
+on * sys.exit() => sys.new_exit();
+"""
+
+    code = """
+import sys
+a = sys.exit
+sys.exit()
+sys.exit(1)
+sys.exit(1,2)
+"""
+
+    with using_tmp_file(code) as py_file:
+        with using_tmp_file(ypatch) as ypatch_file:
+            _, content = execute_mypy(py_file, ypatch_file)
+            assert content == """
+import sys
+a = sys.exit
+sys.new_exit()
+sys.exit(1)
+sys.exit(1,2)
+"""
+
+def test_fqe_call_subst_fully_qualified_name_with_args():
+    ypatch = """
+on * sys.exit($x, $y) => sys.new_exit($y, $x);
+"""
+
+    code = """
+import sys
+a = sys.exit
+sys.exit()
+sys.exit(1)
+sys.exit(1, 2)
+"""
+
+    with using_tmp_file(code) as py_file:
+        with using_tmp_file(ypatch) as ypatch_file:
+            _, content = execute_mypy(py_file, ypatch_file)
+            assert content == """
+import sys
+a = sys.exit
+sys.exit()
+sys.exit(1)
+sys.new_exit(2, 1)
+"""
+
 def test_fqe_call_subst_args_simple():
     ypatch = """
 on * sys.exit($x, $y) => new_exit($y, $x);
