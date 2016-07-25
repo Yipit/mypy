@@ -628,6 +628,47 @@ from sys import exit
 exit(bar=[10, 11])
 """
 
+
+def test_fqe_call_subst_rest():
+    ypatch = """
+on * sys.exit(*$x) => new_exit($x);
+"""
+
+    code = """
+from sys import exit
+exit(*args)
+exit(args)
+"""
+
+    with using_tmp_file(code) as py_file:
+        with using_tmp_file(ypatch) as ypatch_file:
+            _, content = execute_mypy(py_file, ypatch_file)
+            assert content == """
+from sys import exit
+new_exit(args)
+exit(args)
+"""
+
+def test_fqe_call_subst_for_rest():
+    ypatch = """
+on * sys.exit($x) => new_exit(*$x);
+"""
+
+    code = """
+from sys import exit
+exit(*args)
+exit(args)
+"""
+
+    with using_tmp_file(code) as py_file:
+        with using_tmp_file(ypatch) as ypatch_file:
+            _, content = execute_mypy(py_file, ypatch_file)
+            assert content == """
+from sys import exit
+exit(*args)
+new_exit(*args)
+"""
+
 # def test_fqe_call_subst_add_param_with_varargs():
 #     ypatch = """
 # on * sys.exit($x, ...) => new_exit($x, ...);
