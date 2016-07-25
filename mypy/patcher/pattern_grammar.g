@@ -140,7 +140,7 @@ python_line_term :name :arity :has_varg = spaces !(self.input.position):p py_nam
 python_line_sig = token("(") python_line_args:a token(")") -> a
 
 python_line_args = python_line_arg:x (token(',') python_line_arg)*:xs -> [x]+xs
-                 | -> [None]
+                 | -> []
 
 python_line_arg = spaces pyid:k token('=') python_arg:v -> k + '=' + v
                 | python_arg

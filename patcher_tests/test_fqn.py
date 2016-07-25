@@ -550,6 +550,30 @@ new_exit()
 new_exit(3, 4)
 """
 
+def test_fqe_call_subst_with_varargs():
+    ypatch = """
+on * sys.exit(...) => new_exit(...);
+"""
+
+    code = """
+from sys import exit
+a = exit
+exit()
+exit(1)
+exit(2,3,4)
+"""
+
+    with using_tmp_file(code) as py_file:
+        with using_tmp_file(ypatch) as ypatch_file:
+            _, content = execute_mypy(py_file, ypatch_file)
+            assert content == """
+from sys import exit
+a = exit
+new_exit()
+new_exit(1)
+new_exit(2, 3, 4)
+"""
+
 def test_fqe_call_subst_keyarg():
     ypatch = """
 on * sys.exit(foo=$x) => exit(bar=$x);
