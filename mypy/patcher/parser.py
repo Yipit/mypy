@@ -112,8 +112,10 @@ def _subst_call(visitor, mypy_node, lines, name, pyid, largs, rargs):
             bound_args['rest'] = margs[idx:]
         elif 'vid' in a:
             # the following check for keyword arg is very fishy, but seems safe
-            if ('key' in a and '=' in margs[idx] and a['key'] == margs[idx].split('=')[0]) or ('key' not in a and '=' not in margs[idx]):
+            if ('key' in a and '=' in margs[idx] and a['key'] == margs[idx].split('=')[0]):
                 bound_args[a['vid']] = margs[idx].split('=')[1]
+            elif 'key' not in a and '=' not in margs[idx]:
+                bound_args[a['vid']] = margs[idx]
             else:
                 return lines # failed to match kwarg, e.g. "foo(key=$x)" with "foo($x). ignore it
         else:
