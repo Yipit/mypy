@@ -526,7 +526,7 @@ exit()
 new_exit(3, [k, 'a', 1, 'b', {'c': (4, 7, 8), 'd': 5}], 2)
 """
 
-def test_fqe_call_subst_varargs():
+def test_fqe_call_subst_remove_with_varargs():
     ypatch = """
 on * sys.exit($x, ...) => new_exit(...);
 """
@@ -550,8 +550,61 @@ new_exit()
 new_exit(3, 4)
 """
 
+def test_fqe_call_subst_keyarg():
+    ypatch = """
+on * sys.exit(foo=$x) => exit(bar=$x);
+"""
 
-# def test_fqe_call_subst_varargs():
+    code = """
+from sys import exit
+exit(foo=[10, 11])
+"""
+
+    with using_tmp_file(code) as py_file:
+        with using_tmp_file(ypatch) as ypatch_file:
+            _, content = execute_mypy(py_file, ypatch_file)
+            assert content == """
+from sys import exit
+exit(bar=[10, 11])
+"""
+
+def test_fqe_call_subst_keyarg_not_matched():
+    ypatch = """
+on * sys.exit(foo=$x) => exit(bar=$x);
+"""
+
+    code = """
+from sys import exit
+exit(baz=[10, 11])
+"""
+
+    with using_tmp_file(code) as py_file:
+        with using_tmp_file(ypatch) as ypatch_file:
+            _, content = execute_mypy(py_file, ypatch_file)
+            assert content == """
+from sys import exit
+exit(baz=[10, 11])
+"""
+
+def test_fqe_call_subst_keyarg_added():
+    ypatch = """
+on * sys.exit($x) => exit(bar=$x);
+"""
+
+    code = """
+from sys import exit
+exit([10, 11])
+"""
+
+    with using_tmp_file(code) as py_file:
+        with using_tmp_file(ypatch) as ypatch_file:
+            _, content = execute_mypy(py_file, ypatch_file)
+            assert content == """
+from sys import exit
+exit(bar=[10, 11])
+"""
+
+# def test_fqe_call_subst_add_param_with_varargs():
 #     ypatch = """
 # on * sys.exit($x, ...) => new_exit($x, ...);
 # """

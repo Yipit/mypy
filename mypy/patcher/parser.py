@@ -93,7 +93,7 @@ def _substitute_token(old_value, new_value, line):
 
 
 
-def _subst_line(visitor, mypy_node, lines, name, pyid, largs, rargs):
+def _subst_call(visitor, mypy_node, lines, name, pyid, largs, rargs):
     has_var_arg = any([x['vararg'] for x in largs])
     line_offset = 0
     while True:
@@ -111,7 +111,11 @@ def _subst_line(visitor, mypy_node, lines, name, pyid, largs, rargs):
         if a['vararg']:
             bound_args['rest'] = margs[idx:]
         elif 'vid' in a:
-            bound_args[a['vid']] = margs[idx]
+            # the following check for keyword arg is very fishy, but seems safe
+            if ('key' in a and '=' in margs[idx] and a['key'] == margs[idx].split('=')[0]) or ('key' not in a and '=' not in margs[idx]):
+                bound_args[a['vid']] = margs[idx].split('=')[1]
+            else:
+                return lines # failed to match kwarg, e.g. "foo(key=$x)" with "foo($x). ignore it
         else:
             raise Exception("?")
     res_args = []
@@ -121,7 +125,10 @@ def _subst_line(visitor, mypy_node, lines, name, pyid, largs, rargs):
         elif 'vid' in a and a['vid'].isdigit():
             res_args.append(visitor.get_parameter(int(a['vid'])))
         elif 'vid' in a:
-            res_args.append(bound_args[a['vid']])
+            if 'key' in a:
+                res_args.append(a['key'] + '=' + bound_args[a['vid']])
+            else:
+                res_args.append(bound_args[a['vid']])
         else:
             raise Exception('?')
     return lines[0:begin+line_offset] + '{}({})'.format(pyid, ', '.join(res_args)) + lines[line_offset+end:]
@@ -153,7 +160,7 @@ def subst_call_action(lfqe, pyid, largs, rargs, visitor, mypy_node, source_lines
         source_lines[mypy_node.line-1] = _substitute_token(target_term, pyid, line)
     else:
         lines = '\n'.join(source_lines[mypy_node.line-1:])
-        new_lines = _subst_line(visitor, mypy_node, lines, target_term, pyid, largs, rargs)
+        new_lines = _subst_call(visitor, mypy_node, lines, target_term, pyid, largs, rargs)
         del source_lines[mypy_node.line-1:]
         for i, line in enumerate(new_lines.split('\n')):
             source_lines.append(line)

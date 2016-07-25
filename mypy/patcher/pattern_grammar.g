@@ -60,8 +60,10 @@ varargs_qualifier = token("**")
                   |
 
 lhs_arg = token("$") letter+:x -> ['vid', ''.join(x)]
+        | spaces pyid:k token('=') lhs_arg:v -> ['kwarg', k, v]
         | py_name:x -> ['pyid', x]
         | token("...") -> 'arg_rest'
+
 
 action = token("warn") quoted_string:s -> ["warning", s]
        | token("delete") -> ["delete"]
@@ -79,6 +81,7 @@ rhs_arg_el = varargs_qualifier:q rhs_arg:x -> ['arg', q, x]
 
 rhs_arg = token("$") letter+:x -> ['vid', ''.join(x)]
         | token("$") digit+:x -> ['vparam', ''.join(x)]
+        | spaces pyid:k token('=') rhs_arg:v -> ['kwarg', k, v]
         | py_name:x -> ['pyid', x]
         | digit+:d -> ['number', ''.join(d)]
         | token("...") -> 'arg_rest'
@@ -98,6 +101,7 @@ ast_lhs_args = [ast_lhs_arg*:a] -> a
 
 ast_lhs_arg = ['arg' :qualifier 'arg_rest'] -> {'vararg': True, 'qualifier': qualifier}
             | ['arg' :qualifier ['vid' :name]] -> {'vararg': False, 'vid': name, 'qualifier': qualifier}
+            | ['arg' :qualifier ['kwarg' :key ['vid' :name]]] -> {'vararg': False, 'key': key, 'vid': name, 'qualifier': qualifier}
 
 
 fqe_action :lfqe = ['warning' ['string' :msg]] -> self.g.warning_for_fqe(lfqe, msg)
@@ -114,6 +118,7 @@ ast_rhs_args = [ast_rhs_arg*:a] -> a
 
 ast_rhs_arg = ['arg' :qualifier 'arg_rest'] -> {'vararg': True, 'qualifier': qualifier}
             | ['arg' :qualifier ['vid' :name]] -> {'vararg': False, 'vid': name, 'qualifier': qualifier}
+            | ['arg' :qualifier ['kwarg' :key ['vid' :name]]] -> {'vararg': False, 'key': key, 'vid': name, 'qualifier': qualifier}
             | ['arg' :qualifier ['pyid' :name]] -> {'vararg': False, 'pyid': name, 'qualifier': qualifier}
 
 
@@ -137,7 +142,10 @@ python_line_sig = token("(") python_line_args:a token(")") -> a
 python_line_args = python_line_arg:x (token(',') python_line_arg)*:xs -> [x]+xs
                  | -> [None]
 
-python_line_arg = quoted_string:x -> repr(x[1])
+python_line_arg = spaces pyid:k token('=') python_arg:v -> k + '=' + v
+                | python_arg
+
+python_arg = quoted_string:x -> repr(x[1])
    | quoted_string_single:x -> repr(x[1])
    | python_square_bracket_arg
    | python_curly_bracket_arg
